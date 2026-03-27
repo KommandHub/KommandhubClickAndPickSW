@@ -1,0 +1,33 @@
+{
+  "checkout": {
+    "kommandhub-click-and-pick": {
+      "unsupportedDeliveryMethod": "The selected delivery method \"%deliveryMethodName%\" is not supported for the chosen payment method. Please select a different delivery method."
+    }
+  },
+  "error": {
+    "kommandhub-click-and-pick": {
+      "unsupportedDeliveryMethod": "The selected delivery method \"%deliveryMethodName%\" is not supported for the chosen payment method. Please select a different delivery method."
+    }
+  },
+  "general": {
+    "kommandhub-click-and-pick": {
+      "daysOfWeek": {
+        "monday": "Monday",
+        "tuesday": "Tuesday",
+        "wednesday": "Wednesday",
+        "thursday": "Thursday",
+        "friday": "Friday",
+        "saturday": "Saturday",
+        "sunday": "Sunday"
+      },
+      "locationInfoFields": {
+        "storeName": "Pickup Location",
+        "address": "Address",
+        "openDays": "Open Days",
+        "openHours": "Open Hours",
+        "phone": "Phone",
+        "email": "Email"
+      }
+    }
+  }
+}

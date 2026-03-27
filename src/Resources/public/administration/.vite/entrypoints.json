@@ -1,0 +1,27 @@
+{
+  "base": "/bundles/kommandhubclickandpicksw/administration/",
+  "entryPoints": {
+    "kommandhub-click-and-pick-s-w": {
+      "css": [],
+      "dynamic": [
+        "/bundles/kommandhubclickandpicksw/administration/assets/index-BnzVfnlI.js",
+        "/bundles/kommandhubclickandpicksw/administration/assets/index-B9NnYE0U.js",
+        "/bundles/kommandhubclickandpicksw/administration/assets/index-PI2Sjgfn.js"
+      ],
+      "js": [
+        "/bundles/kommandhubclickandpicksw/administration/assets/kommandhub-click-and-pick-s-w-I-WU7c7m.js"
+      ],
+      "legacy": false,
+      "preload": []
+    }
+  },
+  "legacy": false,
+  "metadatas": {},
+  "version": [
+    "7.1.0",
+    7,
+    1,
+    0
+  ],
+  "viteServer": null
+}

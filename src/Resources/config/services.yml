@@ -1,0 +1,15 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  Kommandhub\ClickAndPickSW\:
+    resource: '../../*'
+    exclude: '../../{DependencyInjection,Migrations,Tests,Kernel.php}'
+
+  Kommandhub\ClickAndPickSW\Storefront\Controller\:
+    resource: '../../Storefront/Controller'
+    public: true
+    calls:
+      - [setContainer, ['@service_container']]

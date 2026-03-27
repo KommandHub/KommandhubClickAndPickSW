@@ -1,0 +1,33 @@
+{
+  "checkout": {
+    "kommandhub-click-and-pick": {
+      "unsupportedDeliveryMethod": "Le mode de livraison sélectionné « \"%deliveryMethodName%\" » n'est pas pris en charge pour le mode de paiement choisi. Veuillez sélectionner un autre mode de livraison."
+    }
+  },
+  "error": {
+    "kommandhub-click-and-pick": {
+      "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus."
+    }
+  },
+  "general": {
+    "kommandhub-click-and-pick": {
+      "daysOfWeek": {
+        "monday": "Lundi",
+        "tuesday": "Mardi",
+        "wednesday": "Mercredi",
+        "thursday": "Jeudi",
+        "friday": "Vendredi",
+        "saturday": "Samedi",
+        "sunday": "Dimanche"
+      },
+      "locationInfoFields": {
+        "storeName": "Lieu de retrait",
+        "address": "Adresse",
+        "openDays": "Jours d'ouverture",
+        "openHours": "Heures d'ouverture",
+        "phone": "Téléphone",
+        "email": "E-mail"
+      }
+    }
+  }
+}

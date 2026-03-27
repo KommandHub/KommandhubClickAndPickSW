@@ -1,0 +1,24 @@
+services:
+  shopware:
+    build: ./
+    container_name: kommandhub-click-and-pick-shopware
+    environment:
+      - 'XDEBUG_ENABLED=0'
+      - 'PHP_VERSION=8.3'
+    volumes:
+      # ----------------------------------------------------------------------------------------------------------------------------------
+      # PLUGINS
+      - "./:/var/www/html/custom/plugins/KommandhubClickAndPickSW"
+      - "database:/var/lib/mysql"
+      - "./Makefile:/var/www/html/Makefile"
+      # - ".env.test:/var/www/html/.env.test"
+      # ----------------------------------------------------------------------------------------------------------------------------------
+      # EXCLUDE
+      - "/var/www/html/custom/plugins/KommandhubClickAndPickSW/.git/"
+      - "/var/www/html/custom/plugins/KommandhubClickAndPickSW/node_modules/"
+      - "/var/www/html/custom/plugins/KommandhubClickAndPickSW/vendor/"
+      # ----------------------------------------------------------------------------------------------------------------------------------
+
+volumes:
+  database:
+    driver: local

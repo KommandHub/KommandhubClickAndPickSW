@@ -1,0 +1,72 @@
+{% block pickup_location_field_info %}
+    {% if location is not null %}
+    {% block pickup_location_field_info_style %}
+        <style>
+            .pickup-location-card {
+                /*border: 1px solid #ddd;*/
+                /*padding: 10px 12px; !* reduced padding *!*/
+                /*max-width: 320px;  !* slightly smaller width *!*/
+                background: #fff;
+                font-family: Arial, sans-serif;
+                /*font-size: 13px;   !* smaller base font *!*/
+                line-height: 1.4;  /* tighter spacing */
+            }
+
+            .pickup-name {
+                margin-bottom: 6px;
+                font-size: 15px;   /* reduced from 18px */
+                font-weight: 600;
+            }
+
+            .pickup-section {
+                margin-bottom: 6px; /* reduced spacing */
+            }
+
+            .pickup-section p {
+                margin: 2px 0;      /* tighter paragraph spacing */
+            }
+        </style>
+    {% endblock %}
+
+    {% block pickup_location_field_info_wrapper %}
+        <div class="pickup-location-location-field-id-info-inner mt-3">
+            {% block pickup_location_field_info_card %}
+                <div class="pickup-location-card">
+                    {% block pickup_location_field_info_name %}
+                        <strong>{{ "general.kommandhub-click-and-pick.locationInfoFields.storeName" | trans }}:</strong> {{ location.name }}
+                    {% endblock %}
+
+                    {% block pickup_location_field_info_address_section %}
+                        <div class="pickup-section">
+                            <p class="pickup-address">
+                                <strong>{{ "general.kommandhub-click-and-pick.locationInfoFields.address" | trans }}:</strong>
+                                {{ location.street }}, {% if location.postalCode %}{{ location.postalCode }} {% endif %}{{ location.city }}
+                            </p>
+                        </div>
+                    {% endblock %}
+
+                    {% block pickup_location_field_info_schedule_section %}
+                        <div class="pickup-section">
+                            <p><strong>{{ "general.kommandhub-click-and-pick.locationInfoFields.openDays" | trans }}:</strong> {{ format_calendar_days(location.openDays) }}</p>
+                            <p><strong>{{ "general.kommandhub-click-and-pick.locationInfoFields.openHours" | trans }}:</strong> {{ location.openingHours }} - {{ location.closingHours }}</p>
+                        </div>
+                    {% endblock %}
+
+                    {% block pickup_location_field_info_contact_section %}
+                        {% if config('KommandhubClickAndPickSW.config.showContactDetailInPickupLocationInfo') %}
+                            <div class="pickup-section">
+                                {% if location.phone_number %}
+                                    <p><strong>{{ "general.kommandhub-click-and-pick.locationInfoFields.phone" | trans }}:</strong> {{ location.phone_number }}</p>
+                                {% endif %}
+                                {% if location.email %}
+                                    <p><strong>{{ "general.kommandhub-click-and-pick.locationInfoFields.email" | trans }}:</strong> {{ location.email }}</p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endblock %}
+                </div>
+            {% endblock %}
+        </div>
+    {% endblock %}
+    {% endif %}
+{% endblock %}

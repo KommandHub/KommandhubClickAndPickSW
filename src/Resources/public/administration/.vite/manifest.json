@@ -1,0 +1,34 @@
+{
+  "main.js": {
+    "file": "assets/kommandhub-click-and-pick-s-w-I-WU7c7m.js",
+    "name": "kommandhub-click-and-pick-s-w",
+    "src": "main.js",
+    "isEntry": true,
+    "dynamicImports": [
+      "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js",
+      "module/kommandhub-pickup-location/page/kommandhub-pickup-location-list/index.js",
+      "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js"
+    ]
+  },
+  "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js": {
+    "file": "assets/index-BnzVfnlI.js",
+    "name": "index",
+    "src": "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js",
+    "isDynamicEntry": true
+  },
+  "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js": {
+    "file": "assets/index-PI2Sjgfn.js",
+    "name": "index",
+    "src": "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js",
+    "isDynamicEntry": true
+  },
+  "module/kommandhub-pickup-location/page/kommandhub-pickup-location-list/index.js": {
+    "file": "assets/index-B9NnYE0U.js",
+    "name": "index",
+    "src": "module/kommandhub-pickup-location/page/kommandhub-pickup-location-list/index.js",
+    "isDynamicEntry": true,
+    "css": [
+      "assets/index-ESagiIEH.css"
+    ]
+  }
+}

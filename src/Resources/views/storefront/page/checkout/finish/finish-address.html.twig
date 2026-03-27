@@ -1,0 +1,17 @@
+{% sw_extends '@Storefront/storefront/page/checkout/finish/finish-address.html.twig' %}
+
+{% block page_checkout_finish_address_shipping_data %}
+
+    {{ parent() }}
+
+    {% if order.customFields.kommandhub_pickup_location_id is not null %}
+        {% set salesChannelPickupLocationInfoOptions = {
+            url: path("frontend.kommandhub.sales-channel.pickup-locations.show", { salesChannelId: context.salesChannel.id, locationId: order.customFields.kommandhub_pickup_location_id }),
+        }%}
+
+        {% block component_shipping_method_label_kommandhub_self_pickup_location_field_info %}
+            <div data-sales-channel-pickup-location-info="true"
+                 data-sales-channel-pickup-location-info-options="{{ salesChannelPickupLocationInfoOptions|json_encode }}"></div>
+        {% endblock %}
+    {% endif %}
+{% endblock %}

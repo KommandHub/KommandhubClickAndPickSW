@@ -1,0 +1,1 @@
+import './module/kommandhub-pickup-location';

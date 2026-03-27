@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/master/src/Core/System/SystemConfig/Schema/config.xsd">
+    <card>
+        <title>General Configuration</title>
+        <title lang="de-DE">Allgemeine Konfiguration</title>
+        <title lang="fr-FR">Configuration Générale</title>
+
+        <input-field type="bool">
+            <name>enablePickupLocationSelection</name>
+            <label>Enable pickup location selection</label>
+            <label lang="de-DE">Abholort auswählen</label>
+            <label lang="fr-FR">Activer la sélection du lieu de ramassage</label>
+            <help-text>Enable or disable the pickup location selection during checkout.</help-text>
+            <help-text lang="de-DE">Aktivieren oder deaktivieren Sie die Auswahl des Abholortes während des Checkouts.</help-text>
+            <help-text lang="fr-FR">Activer ou désactiver la sélection du lieu de ramassage lors du passage à la caisse.</help-text>
+            <default-value>true</default-value>
+        </input-field>
+
+        <input-field type="bool">
+            <name>showStreetNameInPickupLocationSelectionField</name>
+            <label>Show street name in pickup location selection</label>
+            <label lang="de-DE">Straßenname in der Auswahl des Abholortes anzeigen</label>
+            <label lang="fr-FR">Afficher le nom de la rue dans la sélection du lieu de ramassage</label>
+            <help-text>Show or hide the street name in the pickup location selection during checkout.</help-text>
+            <help-text lang="de-DE">Straßennamen in der Auswahl des Abholortes während des Checkouts anzeigen oder ausblenden.</help-text>
+            <help-text lang="fr-FR">Afficher ou masquer le nom de la rue dans la sélection du lieu de ramassage lors du passage à la caisse.</help-text>
+            <default-value>false</default-value>
+        </input-field>
+
+        <input-field type="bool">
+            <name>showContactDetailInPickupLocationInfo</name>
+            <label>Show contact details in pickup location info</label>
+            <label lang="de-DE">Kontaktdetails in den Informationen zum Abholort anzeigen</label>
+            <label lang="fr-FR">Afficher les coordonnées dans les informations sur le lieu de ramassage</label>
+            <help-text>Show or hide the contact details in the pickup location info during checkout.</help-text>
+            <help-text lang="de-DE">Kontaktdetails in den Informationen zum Abholort während des Checkouts anzeigen oder ausblenden.</help-text>
+            <help-text lang="fr-FR">Afficher ou masquer les coordonnées dans les informations sur le lieu de ramassage lors du passage à la caisse.</help-text>
+            <default-value>true</default-value>
+        </input-field>
+    </card>
+</config>
