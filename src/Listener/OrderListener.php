@@ -9,7 +9,10 @@ use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
 use Kommandhub\ClickAndPickSW\Service\CustomFieldsInstaller;
 use Shopware\Core\Checkout\Cart\Event\CheckoutOrderPlacedEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Checkout\Order\OrderEvents;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -32,6 +35,7 @@ readonly class OrderListener
      */
     public function __construct(
         private EntityRepository $orderRepository,
+        private EntityRepository $kommandhubPickupLocationRepository,
         private EventDispatcherInterface $eventDispatcher
     ) {}
 
@@ -57,6 +61,120 @@ readonly class OrderListener
 
         $this->updateOrderWithPickupLocation($order, $pickupLocationId, $context->getContext());
         $this->dispatchPickupOrderPlacedEvent($order, $salesChannelContext);
+    }
+
+    /**
+     * Handle order-loaded event.
+     */
+    #[AsEventListener(event: OrderEvents::ORDER_LOADED_EVENT)]
+    public function onOrderLoaded(EntityLoadedEvent $event): void
+    {
+        // Step 1: Build map of orderId => pickupLocationId
+        $orderLocationMap = $this->extractOrderLocationMap($event);
+
+        if ($orderLocationMap === []) {
+            return;
+        }
+
+        // Step 2: Fetch pickup locations
+        $pickupLocationsById = $this->fetchPickupLocationsById(
+            array_values($orderLocationMap),
+            $event
+        );
+
+        if ($pickupLocationsById === []) {
+            return;
+        }
+
+        // Step 3: Attach pickup locations to orders
+        $this->attachPickupLocations($event, $orderLocationMap, $pickupLocationsById);
+    }
+
+    /**
+     * Extract mapping of order IDs to pickup location IDs.
+     *
+     * @return array<string, string> [orderId => locationId]
+     */
+    private function extractOrderLocationMap(EntityLoadedEvent $event): array
+    {
+        $map = [];
+
+        foreach ($event->getEntities() as $order) {
+            if (!$order instanceof OrderEntity) {
+                continue;
+            }
+
+            $locationId = $order->getCustomFieldsValue(
+                CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD
+            );
+
+            if (!is_string($locationId) || $locationId === '') {
+                continue;
+            }
+
+            $map[$order->getId()] = $locationId;
+        }
+
+        return $map;
+    }
+
+    /**
+     * Fetch pickup locations indexed by ID.
+     *
+     * @param string[] $locationIds
+     * @return array<string, mixed> [locationId => pickupLocationEntity]
+     */
+    private function fetchPickupLocationsById(array $locationIds, EntityLoadedEvent $event): array
+    {
+        $criteria = new Criteria(array_unique($locationIds));
+
+        $result = $this->kommandhubPickupLocationRepository
+            ->search($criteria, $event->getContext())
+            ->getEntities();
+
+        if ($result->count() === 0) {
+            return [];
+        }
+
+        $mapped = [];
+
+        foreach ($result as $pickupLocation) {
+            $mapped[$pickupLocation->getId()] = $pickupLocation;
+        }
+
+        return $mapped;
+    }
+
+    /**
+     * Attach pickup locations to orders via extensions.
+     *
+     * @param array<string, string> $orderLocationMap
+     * @param array<string, mixed> $pickupLocationsById
+     */
+    private function attachPickupLocations(
+        EntityLoadedEvent $event,
+        array $orderLocationMap,
+        array $pickupLocationsById
+    ): void {
+        foreach ($event->getEntities() as $order) {
+            if (!$order instanceof OrderEntity) {
+                continue;
+            }
+
+            $locationId = $orderLocationMap[$order->getId()] ?? null;
+
+            if ($locationId === null) {
+                continue;
+            }
+
+            $pickupLocation = $pickupLocationsById[$locationId] ?? null;
+
+            if ($pickupLocation === null) {
+                continue;
+            }
+
+            $order->addExtension(self::PICKUP_LOCATION_EXTENSION, $pickupLocation);
+        }
     }
 
     /**
