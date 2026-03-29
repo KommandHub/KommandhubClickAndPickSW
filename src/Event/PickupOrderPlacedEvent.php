@@ -53,6 +53,11 @@ class PickupOrderPlacedEvent extends Event implements SalesChannelAware, SalesCh
         return $this->order->getId();
     }
 
+    public function getOrder(): ?OrderEntity
+    {
+        return $this->order;
+    }
+
     public function getCustomerId(): string
     {
         $customerId = $this->order->getOrderCustomer()?->getCustomerId();
