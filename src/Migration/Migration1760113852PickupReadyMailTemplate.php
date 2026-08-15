@@ -123,23 +123,29 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
      */
     private function createMailTemplateType(Connection $connection, string $typeId, string $technicalName, array $translations): void
     {
-        $connection->insert('mail_template_type', [
-            'id' => Uuid::fromHexToBytes($typeId),
-            'technical_name' => $technicalName,
-            'available_entities' => json_encode(['order' => 'order', 'salesChannel' => 'sales_channel']),
-            'template_data' => '{"order":{"orderNumber":"10060","orderCustomer":{"firstName":"Max","lastName":"Mustermann"},"amountTotal":150.50,"lineItems":[{"label":"Product 1","quantity":1,"price":{"unitPrice":100.0}}]},"salesChannel":{"name":"Storefront"}}',
-            'created_at' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-        ]);
+        $mailTemplateTypeId = Uuid::fromHexToBytes($typeId);
+
+        if (!$this->mailTemplateTypeExists($connection, $mailTemplateTypeId, $technicalName)) {
+            $connection->insert('mail_template_type', [
+                'id' => $mailTemplateTypeId,
+                'technical_name' => $technicalName,
+                'available_entities' => json_encode(['order' => 'order', 'salesChannel' => 'sales_channel']),
+                'template_data' => '{"order":{"orderNumber":"10060","orderCustomer":{"firstName":"Max","lastName":"Mustermann"},"amountTotal":150.50,"lineItems":[{"label":"Product 1","quantity":1,"price":{"unitPrice":100.0}}]},"salesChannel":{"name":"Storefront"}}',
+                'created_at' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+            ]);
+        }
 
         foreach ($translations as $locale => $name) {
             $languageId = $this->getLanguageIdByLocale($connection, $locale);
             if (!empty($languageId)) {
-                $connection->insert('mail_template_type_translation', [
-                    'mail_template_type_id' => Uuid::fromHexToBytes($typeId),
-                    'language_id' => $languageId,
-                    'name' => $name,
-                    'created_at' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-                ]);
+                if (!$this->mailTemplateTypeTranslationExists($connection, $mailTemplateTypeId, $languageId)) {
+                    $connection->insert('mail_template_type_translation', [
+                        'mail_template_type_id' => $mailTemplateTypeId,
+                        'language_id' => $languageId,
+                        'name' => $name,
+                        'created_at' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+                    ]);
+                }
             }
         }
     }
@@ -149,38 +155,108 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
      */
     private function createMailTemplate(Connection $connection, string $templateId, string $templateTypeId, array $translations): void
     {
-        $connection->executeStatement("
-            INSERT IGNORE INTO `mail_template`
-                (id, mail_template_type_id, system_default, created_at)
-            VALUES
-                (:id, :mailTemplateTypeId, :systemDefault, :createdAt)
-        ", [
-            'id' => Uuid::fromHexToBytes($templateId),
-            'mailTemplateTypeId' => Uuid::fromHexToBytes($templateTypeId),
-            'systemDefault' => 0,
-            'createdAt' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-        ]);
+        $mailTemplateId = Uuid::fromHexToBytes($templateId);
+        $mailTemplateTypeId = Uuid::fromHexToBytes($templateTypeId);
+
+        if (!$this->mailTemplateExists($connection, $mailTemplateId)) {
+            $connection->insert('mail_template', [
+                'id' => $mailTemplateId,
+                'mail_template_type_id' => $mailTemplateTypeId,
+                'system_default' => 0,
+                'created_at' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+            ]);
+        }
 
         foreach ($translations as $locale => $translation) {
             $languageId = $this->getLanguageIdByLocale($connection, $locale);
             if (!empty($languageId)) {
-                $connection->executeStatement("
-                    INSERT IGNORE INTO `mail_template_translation`
-                        (mail_template_id, language_id, sender_name, subject, description, content_html, content_plain, created_at)
-                    VALUES
-                        (:mailTemplateId, :languageId, :senderName, :subject, :description, :contentHtml, :contentPlain, :createdAt)
-                ", [
-                    'mailTemplateId' => Uuid::fromHexToBytes($templateId),
-                    'languageId' => $languageId,
-                    'senderName' => $translation['senderName'],
-                    'subject' => $translation['subject'],
-                    'description' => $translation['description'],
-                    'contentHtml' => $translation['contentHtml'],
-                    'contentPlain' => $translation['contentPlain'],
-                    'createdAt' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-                ]);
+                if (!$this->mailTemplateTranslationExists($connection, $mailTemplateId, $languageId)) {
+                    $connection->insert('mail_template_translation', [
+                        'mail_template_id' => $mailTemplateId,
+                        'language_id' => $languageId,
+                        'sender_name' => $translation['senderName'],
+                        'subject' => $translation['subject'],
+                        'description' => $translation['description'],
+                        'content_html' => $translation['contentHtml'],
+                        'content_plain' => $translation['contentPlain'],
+                        'created_at' => (new DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+                    ]);
+                }
             }
         }
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function mailTemplateTypeExists(Connection $connection, string $mailTemplateTypeId, string $technicalName): bool
+    {
+        $sql = <<<SQL
+            SELECT 1
+            FROM `mail_template_type`
+            WHERE `id` = :id OR `technical_name` = :technicalName
+            LIMIT 1
+        SQL;
+
+        return (bool) $connection->executeQuery($sql, [
+            'id' => $mailTemplateTypeId,
+            'technicalName' => $technicalName,
+        ])->fetchOne();
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function mailTemplateTypeTranslationExists(Connection $connection, string $mailTemplateTypeId, string $languageId): bool
+    {
+        $sql = <<<SQL
+            SELECT 1
+            FROM `mail_template_type_translation`
+            WHERE `mail_template_type_id` = :mailTemplateTypeId
+              AND `language_id` = :languageId
+            LIMIT 1
+        SQL;
+
+        return (bool) $connection->executeQuery($sql, [
+            'mailTemplateTypeId' => $mailTemplateTypeId,
+            'languageId' => $languageId,
+        ])->fetchOne();
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function mailTemplateExists(Connection $connection, string $mailTemplateId): bool
+    {
+        $sql = <<<SQL
+            SELECT 1
+            FROM `mail_template`
+            WHERE `id` = :id
+            LIMIT 1
+        SQL;
+
+        return (bool) $connection->executeQuery($sql, [
+            'id' => $mailTemplateId,
+        ])->fetchOne();
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function mailTemplateTranslationExists(Connection $connection, string $mailTemplateId, string $languageId): bool
+    {
+        $sql = <<<SQL
+            SELECT 1
+            FROM `mail_template_translation`
+            WHERE `mail_template_id` = :mailTemplateId
+              AND `language_id` = :languageId
+            LIMIT 1
+        SQL;
+
+        return (bool) $connection->executeQuery($sql, [
+            'mailTemplateId' => $mailTemplateId,
+            'languageId' => $languageId,
+        ])->fetchOne();
     }
 
     /**

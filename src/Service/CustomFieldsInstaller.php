@@ -56,6 +56,10 @@ class CustomFieldsInstaller
 
     public function install(Context $context): void
     {
+        if ($this->customFieldSetExists($context)) {
+            return;
+        }
+
         $this->customFieldSetRepository->upsert([
             self::CUSTOM_FIELDSET
         ], $context);
@@ -63,12 +67,24 @@ class CustomFieldsInstaller
 
     public function addRelations(Context $context): void
     {
-        $this->customFieldSetRelationRepository->upsert(array_map(function (string $customFieldSetId) {
-            return [
+        $relationsToInsert = [];
+
+        foreach ($this->getCustomFieldSetIds($context) as $customFieldSetId) {
+            if ($this->customFieldSetRelationExists($context, $customFieldSetId, OrderDefinition::ENTITY_NAME)) {
+                continue;
+            }
+
+            $relationsToInsert[] = [
                 'customFieldSetId' => $customFieldSetId,
                 'entityName' => OrderDefinition::ENTITY_NAME,
             ];
-        }, $this->getCustomFieldSetIds($context)), $context);
+        }
+
+        if ($relationsToInsert === []) {
+            return;
+        }
+
+        $this->customFieldSetRelationRepository->upsert($relationsToInsert, $context);
     }
 
     /**
@@ -81,5 +97,19 @@ class CustomFieldsInstaller
         $criteria->addFilter(new EqualsFilter('name', self::CUSTOM_FIELDSET_NAME));
 
         return $this->customFieldSetRepository->searchIds($criteria, $context)->getIds();
+    }
+
+    private function customFieldSetExists(Context $context): bool
+    {
+        return $this->getCustomFieldSetIds($context) !== [];
+    }
+
+    private function customFieldSetRelationExists(Context $context, string $customFieldSetId, string $entityName): bool
+    {
+        $criteria = new Criteria();
+        $criteria->addFilter(new EqualsFilter('customFieldSetId', $customFieldSetId));
+        $criteria->addFilter(new EqualsFilter('entityName', $entityName));
+
+        return $this->customFieldSetRelationRepository->searchIds($criteria, $context)->getTotal() > 0;
     }
 }
