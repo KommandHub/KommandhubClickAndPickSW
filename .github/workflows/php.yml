@@ -20,39 +20,41 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.2'
           extensions: mbstring, xml, ctype, iconv, intl, gd, zip
           coverage: pcov
 
       - name: Validate composer.json
-        run: composer validate --no-check-publish
+        run: composer validate
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v3
         with:
           path: vendor
           key: ${{ runner.os }}-php-${{ hashFiles('composer.lock') }}
 
-      # --no-security-blocking: the plugin resolves shopware/core fresh (no lock
-      # in the repo), and current 6.7.x pulls transitive deps (dompdf, mcp/sdk)
-      # carrying upstream security advisories we do not control. The flag lets the
-      # CI test install proceed; it only applies when no lock file is present.
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-interaction --no-security-blocking
+        run: composer install --prefer-dist --no-progress --no-interaction
 
-      # Lint PHP (fast fail)
+      # ✅ Lint PHP (fast fail)
       - name: Lint PHP files
         run: find src -type f -name "*.php" -print0 | xargs -0 -n1 php -l
 
-      # Static analysis
+      # ✅ Static analysis
       - name: Run PHPStan
-        run: ./vendor/bin/phpstan analyse src -c phpstan.dist.neon --no-progress
+        run: ./vendor/bin/phpstan analyse src --no-progress
 
-      # Code style
+      # ✅ Code style
       - name: Run PHP CS Fixer
         run: ./vendor/bin/php-cs-fixer fix --dry-run --diff
 
-      # Unit + mockable tests (no Shopware kernel). Kernel/integration tests live
-      # under tests/Integration and are excluded from the no-kernel CI run.
+      # ✅ Unit + mockable integration tests with coverage (no Shopware kernel!)
+      # Tests tagged @group kernel need a booted Shopware kernel + database and
+      # are excluded here; run the full suite locally with `make test`.
       - name: Run PHPUnit
-        run: CI=true ./vendor/bin/phpunit --testsuite Unit --testdox
+        run: ./vendor/bin/phpunit --exclude-group kernel --testdox --coverage-clover build/logs/clover.xml
+
+      # ✅ Enforce the line-coverage threshold (the plugin bootstrap class,
+      # which is only reachable with a kernel, is excluded in phpunit.dist.xml)
+      - name: Check coverage threshold
+        run: ./vendor/bin/coverage-check build/logs/clover.xml 100
