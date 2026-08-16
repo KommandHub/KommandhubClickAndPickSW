@@ -33,8 +33,12 @@ jobs:
           path: vendor
           key: ${{ runner.os }}-php-${{ hashFiles('composer.lock') }}
 
+      # --no-security-blocking: the plugin resolves shopware/core fresh (no lock
+      # in the repo), and current 6.7.x pulls transitive deps (dompdf, mcp/sdk)
+      # carrying upstream security advisories we do not control. The flag lets the
+      # CI test install proceed; it only applies when no lock file is present.
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-interaction
+        run: composer install --prefer-dist --no-progress --no-interaction --no-security-blocking
 
       # Lint PHP (fast fail)
       - name: Lint PHP files
