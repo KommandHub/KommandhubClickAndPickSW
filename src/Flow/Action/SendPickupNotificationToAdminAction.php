@@ -83,16 +83,6 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
         }
 
         $context = $flow->getContext();
-        $senderEmail = $this->resolveSenderEmail($order);
-
-        if ($senderEmail === null) {
-            $this->logger->error('Pickup admin sender email is not configured; skipping notification.', [
-                'orderId' => $order->getId(),
-                'salesChannelId' => $order->getSalesChannelId(),
-            ]);
-
-            return;
-        }
 
         try {
             $template = $this->loadMailTemplate($this->resolveTemplateId($flow), $context);
@@ -105,7 +95,9 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
                 return;
             }
 
-            $data = $this->buildMailData($template, $order, $pickupLocation, $recipientEmail, $senderEmail, $context);
+            // A missing/invalid configured sender is not fatal: omit it and let
+            // the mail service resolve the sales channel's own sender address.
+            $data = $this->buildMailData($template, $order, $pickupLocation, $recipientEmail, $this->resolveSenderEmail($order), $context);
             /** @var array<string, mixed> $templateData */
             $templateData = $data['mailTemplateData'];
             $this->mailService->send($data, $context, $templateData);
@@ -138,30 +130,19 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
     }
 
     /**
-     * @return array{
-     *     subject: string|null,
-     *     senderName: string|null,
-     *     senderEmail: string,
-     *     recipients: array<string, string|null>,
-     *     salesChannelId: string|null,
-     *     mailTemplateData: array<string, mixed>,
-     *     contentHtml: string|null,
-     *     contentPlain: string|null,
-     *     attachmentsConfig: MailAttachmentsConfig
-     * }
+     * @return array<string, mixed>
      */
     private function buildMailData(
         MailTemplateEntity $template,
         OrderEntity $order,
         PickupLocationEntity $pickupLocation,
         string $recipientEmail,
-        string $senderEmail,
+        ?string $senderEmail,
         Context $context
     ): array {
-        return [
+        $data = [
             'subject' => $template->getSubject(),
             'senderName' => $template->getSenderName(),
-            'senderEmail' => $senderEmail,
             'recipients' => [
                 $recipientEmail => $pickupLocation->getName(),
             ],
@@ -181,6 +162,14 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
                 $order->getId()
             ),
         ];
+
+        // Only pin the sender when we have a valid one; otherwise the mail
+        // service falls back to the sales channel's configured sender.
+        if ($senderEmail !== null) {
+            $data['senderEmail'] = $senderEmail;
+        }
+
+        return $data;
     }
 
     private function resolveSenderEmail(OrderEntity $order): ?string

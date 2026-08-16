@@ -147,12 +147,13 @@ class OrderListenerTest extends TestCase
         );
     }
 
-    public function testPersistsPickupLocationButDoesNotDispatchWhenLocationCannotBeResolved(): void
+    public function testDoesNotPersistOrDispatchWhenLocationCannotBeResolved(): void
     {
         $order = $this->order();
         $context = Context::createDefaultContext();
 
-        $this->orderRepository->expects(static::once())->method('update');
+        // A dangling/deleted location id must not be written to the order.
+        $this->orderRepository->expects(static::never())->method('update');
         $this->pickupLocationRepository
             ->expects(static::once())
             ->method('search')

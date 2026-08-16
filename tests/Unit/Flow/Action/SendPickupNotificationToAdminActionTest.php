@@ -197,29 +197,30 @@ class SendPickupNotificationToAdminActionTest extends TestCase
         $this->action->handleFlow($this->flow($this->order(), $this->location('not-an-email')));
     }
 
-    public function testSkipsWhenSenderEmailConfigurationIsMissing(): void
+    public function testSendsWithoutPinnedSenderWhenSenderEmailConfigurationIsMissing(): void
     {
-        $this->systemConfigService->expects(static::once())->method('get')->willReturn(null);
-        $this->mailTemplateRepository->expects(static::never())->method('search');
-        $this->mailService->expects(static::never())->method('send');
-        $this->logger
+        $this->systemConfigService->method('get')->willReturn(null);
+        $this->mailTemplateRepository->method('search')->willReturn($this->templateResult($this->template()));
+
+        // Missing sender config must not drop the mail: the sender key is simply
+        // omitted so the mail service resolves the sales channel's own sender.
+        $this->mailService
             ->expects(static::once())
-            ->method('error')
-            ->with(
-                'Pickup admin sender email is not configured; skipping notification.',
-                static::callback(static fn (array $context): bool => $context['orderId'] === self::ORDER_ID
-                    && $context['salesChannelId'] === self::SALES_CHANNEL_ID)
-            );
+            ->method('send')
+            ->with(static::callback(static fn (array $data): bool => !\array_key_exists('senderEmail', $data)));
 
         $this->action->handleFlow($this->flow($this->order(), $this->location('pickup@shop.test')));
     }
 
-    public function testSkipsWhenSenderEmailConfigurationIsInvalid(): void
+    public function testSendsWithoutPinnedSenderWhenSenderEmailConfigurationIsInvalid(): void
     {
-        $this->systemConfigService->expects(static::once())->method('get')->willReturn('invalid-address');
-        $this->mailTemplateRepository->expects(static::never())->method('search');
-        $this->mailService->expects(static::never())->method('send');
-        $this->logger->expects(static::once())->method('error');
+        $this->systemConfigService->method('get')->willReturn('invalid-address');
+        $this->mailTemplateRepository->method('search')->willReturn($this->templateResult($this->template()));
+
+        $this->mailService
+            ->expects(static::once())
+            ->method('send')
+            ->with(static::callback(static fn (array $data): bool => !\array_key_exists('senderEmail', $data)));
 
         $this->action->handleFlow($this->flow($this->order(), $this->location('pickup@shop.test')));
     }

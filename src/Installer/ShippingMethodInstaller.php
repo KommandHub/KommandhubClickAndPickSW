@@ -10,6 +10,7 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\System\DeliveryTime\DeliveryTimeEntity;
 
 /**
  * Creates and maintains the "Self pick-up" shipping method (a free, self-service
@@ -19,6 +20,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 readonly class ShippingMethodInstaller
 {
     public const TECHNICAL_NAME = 'kommandhub_self_pickup';
+
+    private const DELIVERY_TIME_ID = '2dcbf55b7c2a65548e8c3e7ea821f1b4';
 
     public function __construct(
         private EntityRepository $shippingMethodRepository,
@@ -97,19 +100,30 @@ readonly class ShippingMethodInstaller
     }
 
     /**
-     * @throws \Exception
+     * Ensure a dedicated pickup delivery time exists and return its id. Using a
+     * fixed id keeps the shipping method bound to a deterministic, pickup-suited
+     * delivery time (15-30 minutes) rather than whatever row happens to sort
+     * first in the delivery_time table. Idempotent.
      */
     private function ensureDeliveryTime(Context $context): string
     {
-        $deliveryTimeId = $this->deliveryTimeRepository
-            ->searchIds(new Criteria(), $context)
+        $existingId = $this->deliveryTimeRepository
+            ->searchIds(new Criteria([self::DELIVERY_TIME_ID]), $context)
             ->firstId();
 
-        if ($deliveryTimeId !== null) {
-            return $deliveryTimeId;
+        if ($existingId === null) {
+            $this->deliveryTimeRepository->create([
+                [
+                    'id' => self::DELIVERY_TIME_ID,
+                    'name' => '15-30 minutes',
+                    'min' => 0.25,
+                    'max' => 0.5,
+                    'unit' => DeliveryTimeEntity::DELIVERY_TIME_HOUR,
+                ],
+            ], $context);
         }
 
-        throw new \Exception('Delivery time not found');
+        return self::DELIVERY_TIME_ID;
     }
 
     private function getAllCustomersRuleId(Context $context): ?string

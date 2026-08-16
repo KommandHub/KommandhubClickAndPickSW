@@ -18,6 +18,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
 #[CoversClass(ShippingMethodInstaller::class)]
 class ShippingMethodInstallerTest extends TestCase
 {
+    private const DELIVERY_TIME_ID = '2dcbf55b7c2a65548e8c3e7ea821f1b4';
+
     private EntityRepository&MockObject $shippingMethodRepository;
 
     private EntityRepository&MockObject $deliveryTimeRepository;
@@ -52,16 +54,18 @@ class ShippingMethodInstallerTest extends TestCase
         $this->installer->install($this->context);
     }
 
-    public function testInstallCreatesShippingMethodWhenMissing(): void
+    public function testInstallCreatesShippingMethodWithFixedDeliveryTimeWhenMissing(): void
     {
         $this->shippingMethodRepository
             ->expects(static::once())
             ->method('searchIds')
             ->willReturn(IdSearchResult::fromIds([], new Criteria(), $this->context));
+        // Dedicated pickup delivery time already present → reused, not recreated.
         $this->deliveryTimeRepository
             ->expects(static::once())
             ->method('searchIds')
-            ->willReturn(IdSearchResult::fromIds(['delivery-time-id'], new Criteria(), $this->context));
+            ->willReturn(IdSearchResult::fromIds([self::DELIVERY_TIME_ID], new Criteria(), $this->context));
+        $this->deliveryTimeRepository->expects(static::never())->method('create');
         $this->ruleRepository
             ->expects(static::once())
             ->method('searchIds')
@@ -76,7 +80,7 @@ class ShippingMethodInstallerTest extends TestCase
 
                     return $shippingMethod['id'] === KommandhubClickAndPickSW::SHIPPING_METHOD_ID
                         && $shippingMethod['technicalName'] === ShippingMethodInstaller::TECHNICAL_NAME
-                        && $shippingMethod['deliveryTimeId'] === 'delivery-time-id'
+                        && $shippingMethod['deliveryTimeId'] === self::DELIVERY_TIME_ID
                         && $shippingMethod['availabilityRuleId'] === 'all-customers-rule-id'
                         && $price['currencyId'] === Defaults::CURRENCY
                         && $price['gross'] === 0
@@ -88,7 +92,7 @@ class ShippingMethodInstallerTest extends TestCase
         $this->installer->install($this->context);
     }
 
-    public function testInstallThrowsWhenNoDeliveryTimeExists(): void
+    public function testInstallCreatesDedicatedDeliveryTimeWhenMissing(): void
     {
         $this->shippingMethodRepository
             ->method('searchIds')
@@ -96,10 +100,24 @@ class ShippingMethodInstallerTest extends TestCase
         $this->deliveryTimeRepository
             ->method('searchIds')
             ->willReturn(IdSearchResult::fromIds([], new Criteria(), $this->context));
-        $this->shippingMethodRepository->expects(static::never())->method('create');
+        $this->ruleRepository
+            ->method('searchIds')
+            ->willReturn(IdSearchResult::fromIds([], new Criteria(), $this->context));
 
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Delivery time not found');
+        // Missing → the installer creates its own pickup delivery time (no throw).
+        $this->deliveryTimeRepository
+            ->expects(static::once())
+            ->method('create')
+            ->with(
+                static::callback(static function (array $payload): bool {
+                    $deliveryTime = $payload[0] ?? null;
+
+                    return $deliveryTime['id'] === self::DELIVERY_TIME_ID
+                        && $deliveryTime['name'] === '15-30 minutes';
+                }),
+                $this->context
+            );
+        $this->shippingMethodRepository->expects(static::once())->method('create');
 
         $this->installer->install($this->context);
     }

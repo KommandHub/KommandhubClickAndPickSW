@@ -58,10 +58,9 @@ readonly class OrderListener
 
         $order = $event->getOrder();
 
-        $this->updateOrderWithPickupLocation($order, $pickupLocationId, $context);
-
-        // Resolve the location once. A missing entity (deleted/invalid id) means
-        // this is not a valid pickup order — skip the flow trigger. Normal
+        // Resolve the location first. A missing entity (deleted/invalid id) means
+        // this is not a valid pickup order — persist nothing and skip the flow
+        // trigger, so the order never stores a dangling reference. Normal
         // delivery orders never get here (no pickup extension).
         $pickupLocation = $this->getPickupLocation($pickupLocationId, $context);
 
@@ -69,6 +68,7 @@ readonly class OrderListener
             return;
         }
 
+        $this->updateOrderWithPickupLocation($order, $pickupLocationId, $context);
         $this->dispatchPickupOrderPlacedEvent($order, $pickupLocation, $salesChannelContext);
     }
 
