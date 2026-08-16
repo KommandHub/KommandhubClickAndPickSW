@@ -176,16 +176,13 @@ The plugin contains its own `docker-compose.yml`, `Dockerfile`, and `Makefile`.
 
 ```bash
 cd custom/plugins/KommandhubClickAndPickSW
-make up-quick
-make test
+make up
+make cs-fix analyse test
 ```
 
-Note: current `Makefile` default `CONTAINER_NAME` differs from `docker-compose.yml` container name. If needed, override it:
-
-```bash
-cd custom/plugins/KommandhubClickAndPickSW
-make CONTAINER_NAME=kommandhub-click-and-pick-shopware test
-```
+`make validate-plugin` runs shopware-cli store-compliance checks and `make zip`
+builds a distributable package into `build/` (both need `make build` first so the
+image picks up the bundled `shopware-cli`). Run `make help` for the full list.
 
 ## Troubleshooting
 

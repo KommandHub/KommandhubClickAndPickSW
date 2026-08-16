@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kommandhub\ClickAndPickSW\Service;
+namespace Kommandhub\ClickAndPickSW\Installer;
 
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationDefinition;
 use Shopware\Core\Checkout\Order\OrderDefinition;
@@ -28,8 +28,8 @@ class CustomFieldsInstaller
             'label' => [
                 'en-GB' => 'Click & Pick',
                 'de-DE' => 'Click & Pick',
-                Defaults::LANGUAGE_SYSTEM => 'Click & Pick'
-            ]
+                Defaults::LANGUAGE_SYSTEM => 'Click & Pick',
+            ],
         ],
         'customFields' => [
             [
@@ -40,12 +40,12 @@ class CustomFieldsInstaller
                     'label' => [
                         'en-GB' => 'Pickup Location',
                         'de-DE' => 'Abholort',
-                        Defaults::LANGUAGE_SYSTEM => 'Pickup Location'
+                        Defaults::LANGUAGE_SYSTEM => 'Pickup Location',
                     ],
-                    'customFieldPosition' => 1
-                ]
-            ]
-        ]
+                    'customFieldPosition' => 1,
+                ],
+            ],
+        ],
     ];
 
     public function __construct(
@@ -61,7 +61,7 @@ class CustomFieldsInstaller
         }
 
         $this->customFieldSetRepository->upsert([
-            self::CUSTOM_FIELDSET
+            self::CUSTOM_FIELDSET,
         ], $context);
     }
 

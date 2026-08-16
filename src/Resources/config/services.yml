@@ -6,10 +6,22 @@ services:
 
   Kommandhub\ClickAndPickSW\:
     resource: '../../*'
-    exclude: '../../{DependencyInjection,Migrations,Tests,Kernel.php}'
+    exclude: '../../{DependencyInjection,Migration,Tests,Kernel.php}'
 
   Kommandhub\ClickAndPickSW\Storefront\Controller\:
     resource: '../../Storefront/Controller'
     public: true
     calls:
       - [setContainer, ['@service_container']]
+
+  # Flow Builder action. flow.action is not autoconfigured, so the tag (with the
+  # action name as `key`) is declared explicitly; the mail service has no
+  # container-wide alias, so it is wired by service id.
+  Kommandhub\ClickAndPickSW\Flow\Action\SendPickupNotificationToAdminAction:
+    arguments:
+      $mailService: '@Shopware\Core\Content\Mail\Service\MailService'
+      $mailTemplateRepository: '@mail_template.repository'
+      $systemConfigService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
+      $logger: '@logger'
+    tags:
+      - { name: 'flow.action', priority: 500, key: 'action.kommandhub.pickup.notify_admin' }

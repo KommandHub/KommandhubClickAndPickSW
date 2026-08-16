@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Entity\PickupLocation;
 
-use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSalesChannelMapping\PickupLocationSalesChannelMappingCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityIdTrait;
 use Shopware\Core\System\SalesChannel\SalesChannelCollection;

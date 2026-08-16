@@ -5,44 +5,76 @@ declare(strict_types=1);
 namespace Kommandhub\ClickAndPickSW;
 
 use Doctrine\DBAL\Connection;
-use Kommandhub\ClickAndPickSW\Checkout\Payment\PayOnPickupPaymentHandler;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSalesChannelMapping\PickupLocationSalesChannelMappingDefinition;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationDefinition;
-use Kommandhub\ClickAndPickSW\Service\CustomFieldsInstaller;
-use Shopware\Core\Checkout\Cart\Rule\ShippingMethodRule;
+use Kommandhub\ClickAndPickSW\Installer\CustomFieldsInstaller;
+use Kommandhub\ClickAndPickSW\Installer\PaymentMethodInstaller;
+use Kommandhub\ClickAndPickSW\Installer\ShippingMethodInstaller;
 use Shopware\Core\Checkout\Payment\PaymentMethodCollection;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Context\ActivateContext;
 use Shopware\Core\Framework\Plugin\Context\DeactivateContext;
 use Shopware\Core\Framework\Plugin\Context\InstallContext;
 use Shopware\Core\Framework\Plugin\Context\UninstallContext;
+use Shopware\Core\Framework\Plugin\Context\UpdateContext;
 use Shopware\Core\Framework\Plugin\Util\PluginIdProvider;
-use Shopware\Core\Framework\Rule\Rule;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class KommandhubClickAndPickSW extends Plugin
 {
-    final const RULE_ID = 'cde3be3c21d76fae830b2e815a6d82ef';
-    final const PAYMENT_METHOD_ID = 'c76322cc1bff7828011f266d9b47f559';
-    final const SHIPPING_METHOD_ID = '25b9d4e415428362abb32d0a7cba2a38';
-    final const STATE_READY_FOR_PICKUP_ID = '4c91ff4dbeda28ae3d001663d4638f21';
+    final public const SHIPPING_METHOD_ID = '25b9d4e415428362abb32d0a7cba2a38';
+    final public const STATE_READY_FOR_PICKUP_ID = '4c91ff4dbeda28ae3d001663d4638f21';
 
     public function install(InstallContext $installContext): void
     {
-        $this->getCustomFieldsInstaller()->install($installContext->getContext());
-        $this->addPaymentMethod($installContext->getContext());
+        $this->installEntities($installContext->getContext());
+    }
+
+    /**
+     * Re-run the installers on update so payment/shipping methods and custom
+     * fields are migrated when their classes or ids move between versions. Each
+     * installer is idempotent, so this is a no-op for an unchanged install.
+     */
+    public function update(UpdateContext $updateContext): void
+    {
+        parent::update($updateContext);
+
+        $this->installEntities($updateContext->getContext());
+    }
+
+    public function activate(ActivateContext $activateContext): void
+    {
+        $context = $activateContext->getContext();
+
+        $this->getPaymentMethodInstaller()->activate($context);
+        $this->getShippingMethodInstaller()->activate($context);
+        $this->getCustomFieldsInstaller()->addRelations($context);
+
+        parent::activate($activateContext);
+    }
+
+    public function deactivate(DeactivateContext $deactivateContext): void
+    {
+        $context = $deactivateContext->getContext();
+
+        $this->getPaymentMethodInstaller()->deactivate($context);
+        $this->getShippingMethodInstaller()->deactivate($context);
+
+        parent::deactivate($deactivateContext);
     }
 
     public function uninstall(UninstallContext $uninstallContext): void
     {
         parent::uninstall($uninstallContext);
 
-        // Only set the payment method to inactive when uninstalling. Removing the payment method would
-        // cause data consistency issues, since the payment method might have been used in several orders
-        $this->setPaymentMethodIsActive(false, $uninstallContext->getContext());
+        $context = $uninstallContext->getContext();
+
+        // Never delete the payment/shipping methods: historical orders reference
+        // them and removal would break those orders. Deactivate instead.
+        $this->getPaymentMethodInstaller()->deactivate($context);
+        $this->getShippingMethodInstaller()->deactivate($context);
 
         if ($uninstallContext->keepUserData()) {
             return;
@@ -53,122 +85,79 @@ class KommandhubClickAndPickSW extends Plugin
             PickupLocationDefinition::ENTITY_NAME,
         ];
 
-        $connection = $this->container->get(Connection::class);
+        $connection = $this->requireContainer()->get(Connection::class);
+
+        if (!$connection instanceof Connection) {
+            throw new \RuntimeException('Database connection service is not available.');
+        }
+
         foreach ($tables as $table) {
             $connection->executeStatement("DROP TABLE IF EXISTS `{$table}`");
         }
     }
 
-    public function activate(ActivateContext $activateContext): void
-    {
-        $this->setPaymentMethodIsActive(true, $activateContext->getContext());
-        $this->getCustomFieldsInstaller()->addRelations($activateContext->getContext());
-        parent::activate($activateContext);
-    }
-
-    public function deactivate(DeactivateContext $deactivateContext): void
-    {
-        $this->setPaymentMethodIsActive(false, $deactivateContext->getContext());
-        parent::deactivate($deactivateContext);
-    }
-
-    private function addPaymentMethod(Context $context): void
+    private function requireContainer(): ContainerInterface
     {
         if ($this->container === null) {
-            return;
+            throw new \RuntimeException('Container is not available.'); // @codeCoverageIgnore
         }
 
-        $paymentMethodExists = $this->getPaymentMethodId();
+        return $this->container;
+    }
 
-        // Payment method exists already, no need to continue here
-        if ($paymentMethodExists) {
-            return;
-        }
+    private function installEntities(Context $context): void
+    {
+        $this->getPaymentMethodInstaller()->install(static::class, $context);
+        $this->getShippingMethodInstaller()->install($context);
+
+        $customFields = $this->getCustomFieldsInstaller();
+        $customFields->install($context);
+        $customFields->addRelations($context);
+    }
+
+    private function getPaymentMethodInstaller(): PaymentMethodInstaller
+    {
+        $container = $this->requireContainer();
+
+        /** @var EntityRepository<PaymentMethodCollection> $paymentMethodRepository */
+        $paymentMethodRepository = $container->get('payment_method.repository');
 
         /** @var PluginIdProvider $pluginIdProvider */
-        $pluginIdProvider = $this->container->get(PluginIdProvider::class);
-        $pluginId = $pluginIdProvider->getPluginIdByBaseClass(get_class($this), $context);
+        $pluginIdProvider = $container->get(PluginIdProvider::class);
 
-        $paymentData = [
-            [
-                'id' => self::PAYMENT_METHOD_ID,
-                // payment handler will be selected by the identifier
-                'handlerIdentifier' => PayOnPickupPaymentHandler::class,
-                'name' => 'Pay on pickup',
-                'description' => 'Pay for your order when you pick it up at the store.',
-                'pluginId' => $pluginId,
-                'afterOrderEnabled' => true,
-                'technicalName' => 'kommandhub_pay_on_pickup',
-                'availabilityRule' => [
-                    'id' => self::RULE_ID,
-                    'name' => 'Payment method is self pick-up',
-                    'priority' => 100,
-                    'conditions' => [
-                        [
-                            'type' => ShippingMethodRule::RULE_NAME,
-                            'value' => [
-                                'operator' => Rule::OPERATOR_EQ,
-                                'shippingMethodIds' => [self::SHIPPING_METHOD_ID],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-        ];
-
-        /** @var EntityRepository<PaymentMethodCollection> $paymentRepository */
-        $paymentRepository = $this->container->get('payment_method.repository');
-        $paymentRepository->upsert($paymentData, $context);
+        return new PaymentMethodInstaller($paymentMethodRepository, $pluginIdProvider);
     }
 
-    private function setPaymentMethodIsActive(bool $active, Context $context): void
+    private function getShippingMethodInstaller(): ShippingMethodInstaller
     {
-        if ($this->container === null) {
-            return;
-        }
+        $container = $this->requireContainer();
 
-        /** @var EntityRepository<PaymentMethodCollection> $paymentRepository */
-        $paymentRepository = $this->container->get('payment_method.repository');
+        /** @var EntityRepository $shippingMethodRepository */
+        $shippingMethodRepository = $container->get('shipping_method.repository');
 
-        $paymentMethodId = $this->getPaymentMethodId();
+        /** @var EntityRepository $deliveryTimeRepository */
+        $deliveryTimeRepository = $container->get('delivery_time.repository');
 
-        // Payment does not even exist, so nothing to (de-)activate here
-        if (!$paymentMethodId) {
-            return;
-        }
+        /** @var EntityRepository $ruleRepository */
+        $ruleRepository = $container->get('rule.repository');
 
-        $paymentMethod = [
-            'id' => $paymentMethodId,
-            'active' => $active,
-        ];
-
-        $paymentRepository->update([$paymentMethod], $context);
-    }
-
-    private function getPaymentMethodId(): ?string
-    {
-        if ($this->container === null) {
-            return null;
-        }
-
-        /** @var EntityRepository $paymentMethodRepository */
-        $paymentMethodRepository = $this->container->get('payment_method.repository');
-
-        // Fetch ID for update
-        $paymentCriteria = (new Criteria())->addFilter(new EqualsFilter('handlerIdentifier', PayOnPickupPaymentHandler::class));
-
-        return $paymentMethodRepository->searchIds($paymentCriteria, Context::createDefaultContext())->firstId();
+        return new ShippingMethodInstaller(
+            $shippingMethodRepository,
+            $deliveryTimeRepository,
+            $ruleRepository
+        );
     }
 
     private function getCustomFieldsInstaller(): CustomFieldsInstaller
     {
-        if ($this->container->has(CustomFieldsInstaller::class)) {
-            return $this->container->get(CustomFieldsInstaller::class);
-        }
+        $container = $this->requireContainer();
 
-        return new CustomFieldsInstaller(
-            $this->container->get('custom_field_set.repository'),
-            $this->container->get('custom_field_set_relation.repository')
-        );
+        /** @var EntityRepository $customFieldSetRepository */
+        $customFieldSetRepository = $container->get('custom_field_set.repository');
+
+        /** @var EntityRepository $customFieldSetRelationRepository */
+        $customFieldSetRelationRepository = $container->get('custom_field_set_relation.repository');
+
+        return new CustomFieldsInstaller($customFieldSetRepository, $customFieldSetRelationRepository);
     }
 }

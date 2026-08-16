@@ -45,7 +45,7 @@ class Migration1760115677AddPickupMailSendFlow extends MigrationStep
                 'flowId' => self::SEND_PICKUP_READY_FLOW_ID,
                 'mailTemplateId' => Migration1760113852PickupReadyMailTemplate::PICKUP_READY_TEMPLATE_ID,
                 'flowName' => self::SEND_PICKUP_READY_MAIL,
-                'event' => 'state_enter.order_delivery.state.ready_for_pickup',
+                'event' => 'state_enter.order_delivery.state.ready',
                 'type' => 'default',
             ],
         ];

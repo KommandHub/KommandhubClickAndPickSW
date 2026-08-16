@@ -1,0 +1,17 @@
+{
+  "sw-flow": {
+    "actions": {
+      "group": {
+        "kommandhubClickAndPick": "Click & Pick"
+      }
+    }
+  },
+  "kommandhub-pickup-notify-action": {
+    "titleSendNotification": "Envoyer la notification de retrait au point de retrait",
+    "description": "Envoyer un e-mail au point de retrait de la commande afin qu'il puisse la préparer",
+    "labelMailTemplate": "Modèle d'e-mail",
+    "placeholderMailTemplate": "Modèle de notification de retrait par défaut",
+    "mailTemplateHint": "Laisser vide pour utiliser le modèle par défaut du plugin. L'e-mail est toujours envoyé au point de retrait de la commande.",
+    "buttonSaveAction": "Enregistrer l'action"
+  }
+}

@@ -6,41 +6,27 @@ namespace Kommandhub\ClickAndPickSW\Listener;
 
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Event\PickupOrderPlacedEvent;
-use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
-use Kommandhub\ClickAndPickSW\Migration\Migration1760113852PickupReadyMailTemplate;
-use Kommandhub\ClickAndPickSW\Service\CustomFieldsInstaller;
+use Kommandhub\ClickAndPickSW\Installer\CustomFieldsInstaller;
 use Shopware\Core\Checkout\Cart\Event\CheckoutOrderPlacedEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Checkout\Order\OrderEvents;
-use Shopware\Core\Content\Mail\Service\AbstractMailService;
-use Shopware\Core\Content\Mail\Service\MailAttachmentsConfig;
-use Shopware\Core\Content\MailTemplate\MailTemplateEntity;
-use Shopware\Core\Content\MailTemplate\Subscriber\MailSendSubscriberConfig;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
- * Class OrderListener
+ * Handles pickup-related order wiring:
  *
- * Central listener handling all pickup-related order logic:
+ * - Persist the selected pickup location onto the order (custom field).
+ * - Attach the pickup location entity to loaded orders (extension).
+ * - Dispatch the {@see PickupOrderPlacedEvent} flow trigger for pickup orders.
  *
- * Responsibilities:
- * - Persist selected pickup location to order (custom fields)
- * - Attach pickup location entity to loaded orders (extension)
- * - Send notification email to pickup location (admin)
- * - Dispatch domain event for pickup orders
- *
- * Design Notes:
- * - Follows SRP by delegating logic to small private methods
- * - Uses early returns to reduce nesting
- * - Safe for high-volume order processing
+ * Notifications (customer and pickup-location mails) are handled entirely by
+ * Flow Builder flows reacting to the triggers — this listener sends no mail.
  */
 readonly class OrderListener
 {
@@ -50,20 +36,13 @@ readonly class OrderListener
         private EntityRepository $orderRepository,
         private EntityRepository $kommandhubPickupLocationRepository,
         private EventDispatcherInterface $eventDispatcher,
-        #[Autowire(service: 'Shopware\Core\Content\Mail\Service\MailService')]
-        private AbstractMailService $mailService,
-        private EntityRepository $mailTemplateRepository,
-        private SystemConfigService $systemConfigService,
-    ) {}
+    ) {
+    }
 
     /**
-     * Handle order placement.
-     *
-     * Flow:
-     * 1. Extract pickup location from context
-     * 2. Persist it to order custom fields
-     * 3. Notify pickup location via email
-     * 4. Dispatch domain event
+     * On order placement: persist the pickup location and, for a valid pickup
+     * order, dispatch the flow trigger. The pickup-location notification is then
+     * sent by the flow bound to that trigger, not from here.
      */
     #[AsEventListener(event: CheckoutOrderPlacedEvent::class)]
     public function onCheckoutOrderPlacedEvent(CheckoutOrderPlacedEvent $event): void
@@ -80,8 +59,17 @@ readonly class OrderListener
         $order = $event->getOrder();
 
         $this->updateOrderWithPickupLocation($order, $pickupLocationId, $context);
-        $this->sendNotificationToAdmin($pickupLocationId, $order, $context);
-        $this->dispatchPickupOrderPlacedEvent($order, $salesChannelContext);
+
+        // Resolve the location once. A missing entity (deleted/invalid id) means
+        // this is not a valid pickup order — skip the flow trigger. Normal
+        // delivery orders never get here (no pickup extension).
+        $pickupLocation = $this->getPickupLocation($pickupLocationId, $context);
+
+        if ($pickupLocation === null) {
+            return;
+        }
+
+        $this->dispatchPickupOrderPlacedEvent($order, $pickupLocation, $salesChannelContext);
     }
 
     /**
@@ -112,29 +100,6 @@ readonly class OrderListener
     }
 
     /**
-     * Send notification email to pickup location.
-     */
-    private function sendNotificationToAdmin(
-        string $pickupLocationId,
-        OrderEntity $order,
-        Context $context
-    ): void {
-        $pickupLocation = $this->getPickupLocation($pickupLocationId, $context);
-        if ($pickupLocation === null) {
-            return;
-        }
-
-        $template = $this->resolveAdminMailTemplate($context);
-        if ($template === null) {
-            return;
-        }
-
-        $data = $this->buildMailData($pickupLocation, $order, $template, $context);
-
-        $this->mailService->send($data, $context, $data['mailTemplateData']);
-    }
-
-    /**
      * Fetch pickup location entity.
      */
     private function getPickupLocation(string $id, Context $context): ?PickupLocationEntity
@@ -147,71 +112,17 @@ readonly class OrderListener
     }
 
     /**
-     * Resolve admin mail template safely.
-     */
-    private function resolveAdminMailTemplate(Context $context): ?MailTemplateEntity
-    {
-        try {
-            return $this->getAdminMailTemplate($context);
-        } catch (\Throwable) {
-            // @todo: add logging
-            return null;
-        }
-    }
-
-    /**
-     * Build email payload.
-     */
-    private function buildMailData(
-        PickupLocationEntity $pickupLocation,
-        OrderEntity $order,
-        MailTemplateEntity $template,
-        Context $context
-    ): array {
-        return [
-            'subject' => $template->getSubject(),
-            'senderName' => $template->getSenderName(),
-            'senderEmail' => $this->getSenderEmail($order),
-            'recipients' => [
-                $pickupLocation->getEmail() => $pickupLocation->getName()
-            ],
-            'salesChannelId' => $order->getSalesChannelId(),
-            'mailTemplateData' => [
-                'order' => $order,
-                'customer' => $order->getOrderCustomer(),
-                'pickupLocation' => $pickupLocation,
-            ],
-            'contentHtml' => $template->getContentHtml(),
-            'contentPlain' => $template->getContentPlain(),
-            'attachmentsConfig' => new MailAttachmentsConfig(
-                $context,
-                $template,
-                new MailSendSubscriberConfig(false),
-                [],
-                $order->getId()
-            ),
-        ];
-    }
-
-    /**
-     * Get sender email from system config.
-     */
-    private function getSenderEmail(OrderEntity $order): ?string
-    {
-        return $this->systemConfigService->get(
-            'core.basicInformation.email',
-            $order->getSalesChannelId()
-        );
-    }
-
-    /**
      * Extract pickup location ID from context extension.
      */
     private function extractPickupLocationId(SalesChannelContext $context): ?string
     {
         $extension = $context->getExtension(self::PICKUP_LOCATION_EXTENSION);
 
-        return $extension?->getVars()['id'] ?? null;
+        $pickupLocationId = $extension?->getVars()['id'] ?? null;
+
+        return \is_string($pickupLocationId) && $pickupLocationId !== ''
+            ? $pickupLocationId
+            : null;
     }
 
     /**
@@ -227,7 +138,7 @@ readonly class OrderListener
         $this->orderRepository->update([[
             'id' => $order->getId(),
             'customFields' => array_merge($customFields, [
-                CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => $pickupLocationId
+                CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => $pickupLocationId,
             ]),
         ]], $context);
     }
@@ -237,40 +148,13 @@ readonly class OrderListener
      */
     private function dispatchPickupOrderPlacedEvent(
         OrderEntity $order,
+        PickupLocationEntity $pickupLocation,
         SalesChannelContext $context
     ): void {
-        foreach ($order->getDeliveries() ?? [] as $delivery) {
-            $method = $delivery->getShippingMethod();
-
-            if ($method?->getId() !== KommandhubClickAndPickSW::SHIPPING_METHOD_ID) {
-                continue;
-            }
-
-            $this->eventDispatcher->dispatch(
-                new PickupOrderPlacedEvent($context, $order),
-                PickupOrderPlacedEvent::EVENT_NAME
-            );
-
-            break;
-        }
-    }
-
-    /**
-     * Retrieve admin mail template.
-     */
-    private function getAdminMailTemplate(Context $context): MailTemplateEntity
-    {
-        $criteria = (new Criteria([
-            Migration1760113852PickupReadyMailTemplate::ADMIN_ORDER_PLACED_TEMPLATE_ID
-        ]))->addAssociation('mailTemplateType')->setLimit(1);
-
-        $template = $this->mailTemplateRepository->search($criteria, $context)->first();
-
-        if (!$template instanceof MailTemplateEntity) {
-            throw new \RuntimeException('Mail template not found');
-        }
-
-        return $template;
+        $this->eventDispatcher->dispatch(
+            new PickupOrderPlacedEvent($context, $order, $pickupLocation),
+            PickupOrderPlacedEvent::EVENT_NAME
+        );
     }
 
     /**
@@ -302,6 +186,8 @@ readonly class OrderListener
     /**
      * Fetch pickup locations indexed by ID.
      *
+     * @param array<int, string> $ids
+     *
      * @return array<string, PickupLocationEntity>
      */
     private function fetchPickupLocationsById(array $ids, Context $context): array
@@ -313,6 +199,10 @@ readonly class OrderListener
         $mapped = [];
 
         foreach ($entities as $entity) {
+            if (!$entity instanceof PickupLocationEntity) {
+                continue;
+            }
+
             $mapped[$entity->getId()] = $entity;
         }
 
@@ -321,6 +211,9 @@ readonly class OrderListener
 
     /**
      * Attach pickup location entities to orders as extensions.
+     *
+     * @param array<string, string> $orderLocationMap
+     * @param array<string, PickupLocationEntity> $locations
      */
     private function attachPickupLocations(
         EntityLoadedEvent $event,

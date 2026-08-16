@@ -1,0 +1,17 @@
+{
+  "sw-flow": {
+    "actions": {
+      "group": {
+        "kommandhubClickAndPick": "Click & Pick"
+      }
+    }
+  },
+  "kommandhub-pickup-notify-action": {
+    "titleSendNotification": "Send pickup notification to admin",
+    "description": "Email the order's pickup location so it can prepare the order",
+    "labelMailTemplate": "Mail template",
+    "placeholderMailTemplate": "Default pickup notification template",
+    "mailTemplateHint": "Leave empty to use the plugin's default admin pickup template. The email is always sent to the order's pickup location.",
+    "buttonSaveAction": "Save action"
+  }
+}

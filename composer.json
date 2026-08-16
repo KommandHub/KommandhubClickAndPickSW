@@ -1,63 +1,86 @@
 {
-  "name": "kommandhub/click-and-pick-sw",
-  "description": "Self pick up feature for Shopware 6.",
-  "type": "shopware-platform-plugin",
-  "version": "1.0.0",
-  "license": "proprietary",
-  "authors": [
-      {
-          "name": "Kommandhub Limited",
-          "email": "admin@kommandhub.com",
-          "role": "Developer"
-      }
-  ],
-  "require": {
-    "shopware/core": "~6.7.0"
-  },
-  "extra": {
-      "shopware-plugin-class": "Kommandhub\\ClickAndPickSW\\KommandhubClickAndPickSW",
-      "copyright": "(c) by Kommandhub Limited",
-      "label": {
-          "de-DE": "Click and Pick - Selbstabholung",
-          "en-GB": "Click and Pick - Self Pickup",
-          "fr-FR": "Click and Pick - Retrait en magasin"
-      },
-      "description": {
-          "de-DE": "Ermöglicht Kunden, online zu bestellen und einen Abholort zu wählen, mit integrierter Zahlung bei Abholung für mehr Flexibilität und Komfort beim Abholen.",
-          "en-GB": "Lets customers complete checkout online and choose a pickup location for their order, with a built-in pay-on-pickup option that offers flexibility and convenience at collection time.",
-          "fr-FR": "Permet aux clients de finaliser leur commande en ligne et de choisir un point de retrait, avec une option de paiement à la collecte pour plus de flexibilité et de commodité."
-      },
-      "manufacturerLink": {
-          "de-DE": "https://www.kommandhub.com",
-          "en-GB": "https://www.kommandhub.com",
-          "fr-FR": "https://www.kommandhub.com"
-      },
-      "supportLink": {
-          "de-DE": "https://www.kommandhub.com/support",
-          "en-GB": "https://www.kommandhub.com/support",
-          "fr-FR": "https://www.kommandhub.com/support"
-      }
-  },
-  "autoload": {
-      "psr-4": {
-          "Kommandhub\\ClickAndPickSW\\": "src/"
-      }
-  },
+    "name": "kommandhub/click-and-pick-sw",
+    "description": "Click and collect for Shopware 6: pickup-location selection in checkout, a self-pickup shipping method and a pay-on-pickup payment method, with pickup-ready order state and mail automation.",
+    "type": "shopware-platform-plugin",
+    "version": "1.0.0",
+    "license": "proprietary",
+    "keywords": [
+        "shopware",
+        "shopware6",
+        "shopware-plugin",
+        "click-and-collect",
+        "click-and-pick",
+        "pickup",
+        "self-pickup",
+        "pay-on-pickup",
+        "checkout",
+        "ecommerce"
+    ],
+    "homepage": "https://www.kommandhub.com",
+    "authors": [
+        {
+            "name": "Kommandhub Limited",
+            "email": "admin@kommandhub.com",
+            "homepage": "https://www.kommandhub.com",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "email": "admin@kommandhub.com",
+        "source": "https://github.com/KommandHub/KommandhubClickAndPickSW",
+        "issues": "https://github.com/KommandHub/KommandhubClickAndPickSW/issues"
+    },
+    "require": {
+        "shopware/core": "~6.7.0",
+        "shopware/storefront": "~6.7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.3",
+        "shopware/dev-tools": "^1.5",
+        "friendsofphp/php-cs-fixer": "^3.88",
+        "phpstan/phpstan": "^2.1",
+        "rregeer/phpunit-coverage-check": "^0.3.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Kommandhub\\ClickAndPickSW\\": "src/"
+        }
+    },
     "autoload-dev": {
         "psr-4": {
             "Kommandhub\\ClickAndPickSW\\Tests\\": "tests/"
         }
     },
-  "require-dev": {
-    "phpunit/phpunit": "^12.3",
-    "shopware/dev-tools": "^1.5",
-    "friendsofphp/php-cs-fixer": "^3.88",
-    "phpstan/phpstan": "^2.1",
-    "rregeer/phpunit-coverage-check": "^0.3.1"
-  },
-  "config": {
-    "allow-plugins": {
-      "symfony/runtime": true
-    }
-  }
+    "extra": {
+        "shopware-plugin-class": "Kommandhub\\ClickAndPickSW\\KommandhubClickAndPickSW",
+        "copyright": "(c) by Kommandhub Limited",
+        "label": {
+            "de-DE": "Click and Pick (Selbstabholung)",
+            "en-GB": "Click and Pick (Self Pickup)",
+            "fr-FR": "Click and Pick (Retrait en magasin)"
+        },
+        "description": {
+            "de-DE": "Ermöglicht Kunden, online zu bestellen und einen Abholort zu wählen, mit integrierter Zahlung bei Abholung für mehr Flexibilität und Komfort beim Abholen.",
+            "en-GB": "Lets customers complete checkout online and choose a pickup location for their order, with a built-in pay-on-pickup option that offers flexibility and convenience at collection time.",
+            "fr-FR": "Permet aux clients de finaliser leur commande en ligne et de choisir un point de retrait, avec une option de paiement à la collecte pour plus de flexibilité et de commodité."
+        },
+        "manufacturerLink": {
+            "de-DE": "https://www.kommandhub.com",
+            "en-GB": "https://www.kommandhub.com",
+            "fr-FR": "https://www.kommandhub.com"
+        },
+        "supportLink": {
+            "de-DE": "https://www.kommandhub.com/support",
+            "en-GB": "https://www.kommandhub.com/support",
+            "fr-FR": "https://www.kommandhub.com/support"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/runtime": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

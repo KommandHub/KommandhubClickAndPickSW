@@ -1,0 +1,17 @@
+{
+  "sw-flow": {
+    "actions": {
+      "group": {
+        "kommandhubClickAndPick": "Click & Pick"
+      }
+    }
+  },
+  "kommandhub-pickup-notify-action": {
+    "titleSendNotification": "Abhol-Benachrichtigung an Standort senden",
+    "description": "Den Abholort der Bestellung per E-Mail benachrichtigen, damit die Bestellung vorbereitet werden kann",
+    "labelMailTemplate": "E-Mail-Vorlage",
+    "placeholderMailTemplate": "Standard-Vorlage für Abhol-Benachrichtigung",
+    "mailTemplateHint": "Leer lassen, um die Standardvorlage des Plugins zu verwenden. Die E-Mail wird immer an den Abholort der Bestellung gesendet.",
+    "buttonSaveAction": "Aktion speichern"
+  }
+}

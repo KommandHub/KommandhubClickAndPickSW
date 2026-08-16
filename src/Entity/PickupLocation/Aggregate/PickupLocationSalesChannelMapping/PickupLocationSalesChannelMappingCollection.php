@@ -19,4 +19,3 @@ class PickupLocationSalesChannelMappingCollection extends EntityCollection
         return PickupLocationSalesChannelMapping::class;
     }
 }
-

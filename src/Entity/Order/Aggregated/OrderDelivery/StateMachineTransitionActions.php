@@ -6,5 +6,5 @@ namespace Kommandhub\ClickAndPickSW\Entity\Order\Aggregated\OrderDelivery;
 
 class StateMachineTransitionActions
 {
-    final const ACTION_READY = 'ready_for_pickup';
+    final public const ACTION_READY = 'ready';
 }

@@ -1,6 +1,6 @@
 <?php
 
-declare (strict_types = 1);
+declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Checkout\Cart;
 
@@ -20,8 +20,7 @@ class PayOnPickupCartProcessor implements CartValidatorInterface
     {
         $paymentMethod = $context->getPaymentMethod();
 
-        if ($paymentMethod->getHandlerIdentifier() !== PayOnPickupPaymentHandler::class)
-        {
+        if ($paymentMethod->getHandlerIdentifier() !== PayOnPickupPaymentHandler::class) {
             return;
         }
 
@@ -29,8 +28,14 @@ class PayOnPickupCartProcessor implements CartValidatorInterface
         $deliveryMethod = $context->getShippingMethod();
 
         if ($deliveryMethod->getId() !== KommandhubClickAndPickSW::SHIPPING_METHOD_ID) {
+            $deliveryMethodName = $deliveryMethod->getTranslation('name');
+
+            if (!\is_string($deliveryMethodName) || $deliveryMethodName === '') {
+                $deliveryMethodName = $deliveryMethod->getName() ?? '';
+            }
+
             $errors->add(new UnsupportedDeliveryMethodCartBlockerError(
-                $deliveryMethod->getTranslation('name')
+                $deliveryMethodName
             ));
         }
     }

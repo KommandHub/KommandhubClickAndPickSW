@@ -273,7 +273,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
 
         $languageId = $connection->executeQuery($sql, ['code' => $locale])->fetchOne();
 
-        return empty($languageId) ? null : $languageId;
+        return \is_string($languageId) && $languageId !== '' ? $languageId : null;
     }
 
     // Pickup Ready Content - English

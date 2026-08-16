@@ -1,0 +1,203 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kommandhub\ClickAndPickSW\Flow\Action;
+
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
+use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
+use Kommandhub\ClickAndPickSW\Migration\Migration1760113852PickupReadyMailTemplate;
+use Psr\Log\LoggerInterface;
+use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Content\Flow\Dispatching\Action\FlowAction;
+use Shopware\Core\Content\Flow\Dispatching\DelayableAction;
+use Shopware\Core\Content\Flow\Dispatching\StorableFlow;
+use Shopware\Core\Content\Mail\Service\AbstractMailService;
+use Shopware\Core\Content\Mail\Service\MailAttachmentsConfig;
+use Shopware\Core\Content\MailTemplate\MailTemplateEntity;
+use Shopware\Core\Content\MailTemplate\Subscriber\MailSendSubscriberConfig;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Event\OrderAware;
+use Shopware\Core\System\SystemConfig\SystemConfigService;
+
+/**
+ * Flow Builder action that emails the order's pickup location so it can prepare
+ * the order. Recipient is the pickup location's own address (not the customer),
+ * so any pickup flow (order placed, order ready, …) can reuse it by requiring
+ * {@see OrderAware} and {@see PickupLocationAware}.
+ *
+ * The mail template is taken from the action config (`mailTemplateId`) when set,
+ * otherwise the plugin's admin pickup template — so the action works both with a
+ * config-less migration flow and a merchant-configured one.
+ */
+class SendPickupNotificationToAdminAction extends FlowAction implements DelayableAction
+{
+    public const ACTION_NAME = 'action.kommandhub.pickup.notify_admin';
+
+    public function __construct(
+        private readonly AbstractMailService $mailService,
+        private readonly EntityRepository $mailTemplateRepository,
+        private readonly SystemConfigService $systemConfigService,
+        private readonly LoggerInterface $logger,
+    ) {
+    }
+
+    public static function getName(): string
+    {
+        return self::ACTION_NAME;
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function requirements(): array
+    {
+        return [OrderAware::class, PickupLocationAware::class];
+    }
+
+    public function handleFlow(StorableFlow $flow): void
+    {
+        if (!$flow->hasData(OrderAware::ORDER) || !$flow->hasData(PickupLocationAware::PICKUP_LOCATION)) {
+            return;
+        }
+
+        $order = $flow->getData(OrderAware::ORDER);
+        $pickupLocation = $flow->getData(PickupLocationAware::PICKUP_LOCATION);
+
+        if (!$order instanceof OrderEntity || !$pickupLocation instanceof PickupLocationEntity) {
+            return;
+        }
+
+        $recipientEmail = trim($pickupLocation->getEmail());
+
+        if ($recipientEmail === '' || !$this->isValidEmail($recipientEmail)) {
+            $this->logger->warning('Pickup location email is missing or invalid; skipping admin notification.', [
+                'pickupLocationId' => $pickupLocation->getId(),
+                'orderId' => $order->getId(),
+                'recipientEmail' => $recipientEmail,
+            ]);
+
+            return;
+        }
+
+        $context = $flow->getContext();
+        $senderEmail = $this->resolveSenderEmail($order);
+
+        if ($senderEmail === null) {
+            $this->logger->error('Pickup admin sender email is not configured; skipping notification.', [
+                'orderId' => $order->getId(),
+                'salesChannelId' => $order->getSalesChannelId(),
+            ]);
+
+            return;
+        }
+
+        try {
+            $template = $this->loadMailTemplate($this->resolveTemplateId($flow), $context);
+
+            if ($template === null) {
+                $this->logger->error('Pickup admin mail template not found; skipping notification.', [
+                    'orderId' => $order->getId(),
+                ]);
+
+                return;
+            }
+
+            $data = $this->buildMailData($template, $order, $pickupLocation, $recipientEmail, $senderEmail, $context);
+            /** @var array<string, mixed> $templateData */
+            $templateData = $data['mailTemplateData'];
+            $this->mailService->send($data, $context, $templateData);
+        } catch (\Throwable $e) {
+            $this->logger->error('Failed to send pickup admin notification.', [
+                'exception' => $e,
+                'orderId' => $order->getId(),
+            ]);
+        }
+    }
+
+    private function resolveTemplateId(StorableFlow $flow): string
+    {
+        $configured = $flow->getConfig()['mailTemplateId'] ?? null;
+
+        return \is_string($configured) && $configured !== ''
+            ? $configured
+            : Migration1760113852PickupReadyMailTemplate::ADMIN_ORDER_PLACED_TEMPLATE_ID;
+    }
+
+    private function loadMailTemplate(string $templateId, Context $context): ?MailTemplateEntity
+    {
+        $criteria = (new Criteria([$templateId]))
+            ->addAssociation('mailTemplateType')
+            ->setLimit(1);
+
+        $template = $this->mailTemplateRepository->search($criteria, $context)->first();
+
+        return $template instanceof MailTemplateEntity ? $template : null;
+    }
+
+    /**
+     * @return array{
+     *     subject: string|null,
+     *     senderName: string|null,
+     *     senderEmail: string,
+     *     recipients: array<string, string|null>,
+     *     salesChannelId: string|null,
+     *     mailTemplateData: array<string, mixed>,
+     *     contentHtml: string|null,
+     *     contentPlain: string|null,
+     *     attachmentsConfig: MailAttachmentsConfig
+     * }
+     */
+    private function buildMailData(
+        MailTemplateEntity $template,
+        OrderEntity $order,
+        PickupLocationEntity $pickupLocation,
+        string $recipientEmail,
+        string $senderEmail,
+        Context $context
+    ): array {
+        return [
+            'subject' => $template->getSubject(),
+            'senderName' => $template->getSenderName(),
+            'senderEmail' => $senderEmail,
+            'recipients' => [
+                $recipientEmail => $pickupLocation->getName(),
+            ],
+            'salesChannelId' => $order->getSalesChannelId(),
+            'mailTemplateData' => [
+                'order' => $order,
+                'customer' => $order->getOrderCustomer(),
+                'pickupLocation' => $pickupLocation,
+            ],
+            'contentHtml' => $template->getContentHtml(),
+            'contentPlain' => $template->getContentPlain(),
+            'attachmentsConfig' => new MailAttachmentsConfig(
+                $context,
+                $template,
+                new MailSendSubscriberConfig(false),
+                [],
+                $order->getId()
+            ),
+        ];
+    }
+
+    private function resolveSenderEmail(OrderEntity $order): ?string
+    {
+        $senderEmail = $this->systemConfigService->get('core.basicInformation.email', $order->getSalesChannelId());
+
+        if (!\is_string($senderEmail)) {
+            return null;
+        }
+
+        $senderEmail = trim($senderEmail);
+
+        return $this->isValidEmail($senderEmail) ? $senderEmail : null;
+    }
+
+    private function isValidEmail(string $email): bool
+    {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    }
+}

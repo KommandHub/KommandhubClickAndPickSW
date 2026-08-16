@@ -6,13 +6,11 @@ namespace Kommandhub\ClickAndPickSW\Storefront\Controller;
 
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Storefront\Framework\Routing\StorefrontRouteScope;
 use Shopware\Storefront\Controller\StorefrontController;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -21,7 +19,8 @@ class SalesChannelPickupLocationController extends StorefrontController
 {
     public function __construct(
         private readonly EntityRepository $kommandhubPickupLocationRepository
-    ) {}
+    ) {
+    }
 
     #[Route(
         path: '/kommandhub/sales-channel/{salesChannelId}/pickup-locations',
