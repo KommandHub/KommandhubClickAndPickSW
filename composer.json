@@ -80,7 +80,10 @@
             "php-http/discovery": true,
             "symfony/runtime": true
         },
-        "sort-packages": true
+        "sort-packages": true,
+        "audit": {
+            "block-insecure": false
+        }
     },
     "minimum-stability": "stable",
     "prefer-stable": true
