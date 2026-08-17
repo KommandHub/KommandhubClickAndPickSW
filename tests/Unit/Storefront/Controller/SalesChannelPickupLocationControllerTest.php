@@ -12,6 +12,7 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\ContainsFilter;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -28,23 +29,27 @@ class SalesChannelPickupLocationControllerTest extends TestCase
         $this->controller = new TestSalesChannelPickupLocationController($this->repository);
     }
 
-    public function testIndexRendersActiveLocationsForSalesChannel(): void
+    public function testIndexRendersActiveLocationsForCurrentOpenDayAndSalesChannel(): void
     {
         $searchResult = $this->createMock(EntitySearchResult::class);
         $context = $this->salesChannelContext();
+        $expectedDay = strtolower((new \DateTimeImmutable())->format('l'));
 
         $this->repository
             ->expects(static::once())
             ->method('search')
             ->with(
-                static::callback(function (Criteria $criteria): bool {
+                static::callback(function (Criteria $criteria) use ($expectedDay): bool {
                     $filters = $criteria->getFilters();
 
                     return $criteria->getAssociation('salesChannels') !== null
                         && $filters[0]?->getField() === 'active'
                         && $filters[0]?->getValue() === true
-                        && $filters[1]?->getField() === 'salesChannels.id'
-                        && $filters[1]?->getValue() === 'sales-channel-id';
+                        && $filters[1] instanceof ContainsFilter
+                        && $filters[1]?->getField() === 'openDays'
+                        && $filters[1]?->getValue() === $expectedDay
+                        && $filters[2]?->getField() === 'salesChannels.id'
+                        && $filters[2]?->getValue() === 'sales-channel-id';
                 }),
                 $context->getContext()
             )
@@ -58,6 +63,17 @@ class SalesChannelPickupLocationControllerTest extends TestCase
             $this->controller->lastTemplate
         );
         static::assertSame($searchResult, $this->controller->lastParameters['locations']);
+    }
+
+    public function testCreateOpenDayFilterUsesMatchingAndNonMatchingDays(): void
+    {
+        $matchingFilter = $this->controller->createOpenDayFilterForDate(new \DateTimeImmutable('2024-01-01'));
+        $nonMatchingFilter = $this->controller->createOpenDayFilterForDate(new \DateTimeImmutable('2024-01-02'));
+
+        static::assertInstanceOf(ContainsFilter::class, $matchingFilter);
+        static::assertSame('monday', $matchingFilter->getValue());
+        static::assertSame('tuesday', $nonMatchingFilter->getValue());
+        static::assertNotSame($matchingFilter->getValue(), $nonMatchingFilter->getValue());
     }
 
     public function testShowRendersSingleLocationForSalesChannel(): void
@@ -109,6 +125,11 @@ class TestSalesChannelPickupLocationController extends SalesChannelPickupLocatio
      * @var array<string, mixed>
      */
     public array $lastParameters = [];
+
+    public function createOpenDayFilterForDate(\DateTimeInterface $date): ContainsFilter
+    {
+        return $this->createOpenDayFilter($date);
+    }
 
     protected function renderStorefront(string $view, array $parameters = []): Response
     {

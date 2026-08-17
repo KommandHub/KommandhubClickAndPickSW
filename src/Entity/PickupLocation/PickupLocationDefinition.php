@@ -52,6 +52,7 @@ class PickupLocationDefinition extends EntityDefinition
             (new StringField('additional_address_line2', 'additionalAddressLine2')),
             (new StringField('city', 'city'))->addFlags(new Required(), new ApiAware()),
             (new StringField('postal_code', 'postalCode'))->addFlags(new Required(), new ApiAware()),
+            (new StringField('time_format', 'timeFormat'))->addFlags(new ApiAware()),
             (new StringField('opening_hours', 'openingHours'))->addFlags(new ApiAware()),
             (new StringField('closing_hours', 'closingHours'))->addFlags(new ApiAware()),
             (new JsonField('open_days', 'openDays'))->addFlags(new ApiAware()),

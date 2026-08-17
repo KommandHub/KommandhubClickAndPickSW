@@ -1,47 +1,27 @@
-// Import the template for the component
 import template from './kommandhub-pickup-location-base-form.html.twig';
 
-// Destructure the mapPropertyErrors helper from Shopware's component helpers
 const { mapPropertyErrors } = Shopware.Component.getComponentHelper();
 
-/**
- * kommandhub-pickup-location-base-form
- * 
- * This component represents the base form for a pickup location in the administration interface.
- * 
- * Props:
- *  - pickupLocation (Object, required): The pickup location data object.
- * 
- * Emits:
- *  - sales-channel-change: Emitted when the sales channel selection changes.
- */
 export default {
-    /**
-     * The template for the pickup location base form component.
-     */
     template,
 
     emits: [
         'sales-channel-change',
-        'open-days-change'
+        'open-days-change',
     ],
 
     inject: [
-        'repositoryFactory'
+        'repositoryFactory',
     ],
 
     props: {
-        /**
-         * The pickup location object containing form data.
-         */
         pickupLocation: {
             type: Object,
             required: true,
-        }
+        },
     },
 
     computed: {
-        // Map property errors for form validation feedback
         ...mapPropertyErrors('pickupLocation', ['name', 'street', 'city', 'email', 'postalCode', 'salesChannelIds']),
 
         salesChannelRepository() {
@@ -58,20 +38,154 @@ export default {
                 { value: 'saturday', label: this.$t('kommandhub-pickup-location.baseForm.saturday') },
                 { value: 'sunday', label: this.$t('kommandhub-pickup-location.baseForm.sunday') },
             ];
-        }
+        },
+
+        timeFormatOptions() {
+            return [
+                { value: '24h', label: this.$tc('kommandhub-pickup-location.baseForm.labelTimeFormat24Hour') },
+                { value: '12h', label: this.$tc('kommandhub-pickup-location.baseForm.labelTimeFormat12Hour') },
+            ];
+        },
+
+        openingHoursOptions() {
+            return this.getTimeOptions();
+        },
+
+        closingHoursOptions() {
+            return this.getTimeOptions();
+        },
+
+    },
+
+    watch: {
+        'pickupLocation.timeFormat': {
+            immediate: true,
+            handler() {
+                if (!this.pickupLocation) {
+                    return;
+                }
+
+                const format = this.getStoredTimeFormat();
+                this.pickupLocation.timeFormat = format;
+                this.pickupLocation.openingHours = this.normalizeStoredTime(this.pickupLocation.openingHours);
+                this.pickupLocation.closingHours = this.normalizeStoredTime(this.pickupLocation.closingHours);
+            },
+        },
     },
 
     methods: {
-        /**
-         * Emit the sales-channel-change event when the sales channel changes.
-         * @param {Object} salesChannel - The selected sales channel ID.
-         */
         onSalesChannelChange(salesChannel) {
             this.$emit('sales-channel-change', salesChannel);
         },
 
         changeOpenDays(openDays) {
-            this.$emit('open-days-change', openDays)
-        }
+            this.$emit('open-days-change', openDays);
+        },
+
+        onTimeFormatChange(value) {
+            const format = this.getSupportedTimeFormat(value);
+            this.pickupLocation.timeFormat = format;
+        },
+
+        onOpeningHoursChange(value) {
+            this.pickupLocation.openingHours = this.normalizeStoredTime(value);
+        },
+
+        onClosingHoursChange(value) {
+            this.pickupLocation.closingHours = this.normalizeStoredTime(value);
+        },
+
+        getSupportedTimeFormat(value) {
+            return value === '12h' ? '12h' : '24h';
+        },
+
+        getStoredTimeFormat() {
+            const value = this.pickupLocation?.openingHours || this.pickupLocation?.closingHours || null;
+
+            if (value && /AM|PM/i.test(value)) {
+                return '12h';
+            }
+
+            return this.getSupportedTimeFormat(this.pickupLocation?.timeFormat);
+        },
+
+        getTimeOptions() {
+            const format = this.getSupportedTimeFormat(this.pickupLocation?.timeFormat);
+            const options = [];
+
+            for (let hour = 0; hour < 24; hour += 1) {
+                for (let minute = 0; minute < 60; minute += 30) {
+                    const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    const label = this.formatTimeForDisplay(value, format);
+
+                    options.push({
+                        value,
+                        label,
+                    });
+                }
+            }
+
+            return options;
+        },
+
+        formatTimeForDisplay(value, format = '24h') {
+            const normalizedValue = this.normalizeStoredTime(value);
+
+            if (!normalizedValue) {
+                return value || '';
+            }
+
+            if (format !== '12h') {
+                return normalizedValue;
+            }
+
+            const [hours, minutes] = normalizedValue.split(':').map(Number);
+            const suffix = hours >= 12 ? 'PM' : 'AM';
+            const normalizedHour = hours % 12 || 12;
+
+            return `${String(normalizedHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${suffix}`;
+        },
+
+        normalizeStoredTime(value) {
+            if (!value) {
+                return null;
+            }
+
+            const timeValue = String(value).trim();
+
+            if (!timeValue) {
+                return null;
+            }
+
+            const twelveHourMatch = timeValue.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (twelveHourMatch) {
+                let hour = Number(twelveHourMatch[1]);
+                const minutes = String(twelveHourMatch[2]).padStart(2, '0');
+                const meridiem = twelveHourMatch[3].toUpperCase();
+
+                if (meridiem === 'AM' && hour === 12) {
+                    hour = 0;
+                }
+
+                if (meridiem === 'PM' && hour < 12) {
+                    hour += 12;
+                }
+
+                return `${String(hour).padStart(2, '0')}:${minutes}`;
+            }
+
+            const twentyFourHourMatch = timeValue.match(/^(\d{1,2}):(\d{2})$/);
+            if (twentyFourHourMatch) {
+                const hour = Number(twentyFourHourMatch[1]);
+                const minutes = String(twentyFourHourMatch[2]).padStart(2, '0');
+
+                if (hour >= 0 && hour <= 23) {
+                    return `${String(hour).padStart(2, '0')}:${minutes}`;
+                }
+            }
+
+            return null;
+        },
+
     },
-}
+};

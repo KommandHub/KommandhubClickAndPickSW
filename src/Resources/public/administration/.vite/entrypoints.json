@@ -4,12 +4,12 @@
     "kommandhub-click-and-pick-s-w": {
       "css": [],
       "dynamic": [
-        "/bundles/kommandhubclickandpicksw/administration/assets/index-BnzVfnlI.js",
+        "/bundles/kommandhubclickandpicksw/administration/assets/index-CjpWOvYc.js",
         "/bundles/kommandhubclickandpicksw/administration/assets/index-B9NnYE0U.js",
         "/bundles/kommandhubclickandpicksw/administration/assets/index-PI2Sjgfn.js"
       ],
       "js": [
-        "/bundles/kommandhubclickandpicksw/administration/assets/kommandhub-click-and-pick-s-w-ODwYJdEf.js"
+        "/bundles/kommandhubclickandpicksw/administration/assets/kommandhub-click-and-pick-s-w-D3Nvr7-q.js"
       ],
       "legacy": false,
       "preload": []

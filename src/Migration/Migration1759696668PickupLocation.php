@@ -36,6 +36,7 @@ class Migration1759696668PickupLocation extends MigrationStep
                 `additional_address_line2` VARCHAR(255) NULL,
                 `city` VARCHAR(255) NOT NULL,
                 `postal_code` VARCHAR(20) NOT NULL,
+                `time_format` VARCHAR(20) NOT NULL DEFAULT '24h',
                 `opening_hours` VARCHAR(255) NULL,
                 `closing_hours` VARCHAR(255) NULL,
                 `open_days` JSON NULL,

@@ -6,6 +6,7 @@ namespace Kommandhub\ClickAndPickSW\Storefront\Controller;
 
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\ContainsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -33,6 +34,7 @@ class SalesChannelPickupLocationController extends StorefrontController
         $criteria = new Criteria();
         $criteria->addAssociation('salesChannels');
         $criteria->addFilter(new EqualsFilter('active', true));
+        $criteria->addFilter($this->createOpenDayFilter());
         $criteria->addFilter(
             new EqualsFilter('salesChannels.id', $salesChannelId)
         );
@@ -64,5 +66,12 @@ class SalesChannelPickupLocationController extends StorefrontController
         return $this->renderStorefront('@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-location-field-info.html.twig', [
             'location' => $location,
         ]);
+    }
+
+    protected function createOpenDayFilter(?\DateTimeInterface $date = null): ContainsFilter
+    {
+        $day = strtolower(($date ?? new \DateTimeImmutable())->format('l'));
+
+        return new ContainsFilter('openDays', $day);
     }
 }

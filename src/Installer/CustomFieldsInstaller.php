@@ -35,13 +35,14 @@ class CustomFieldsInstaller
             [
                 'name' => self::ORDER_PICKUP_LOCATION_CUSTOM_FIELD,
                 'type' => CustomFieldTypes::ENTITY,
-                'entity' => PickupLocationDefinition::ENTITY_NAME,
                 'config' => [
+                    'entity' => PickupLocationDefinition::ENTITY_NAME,
                     'label' => [
                         'en-GB' => 'Pickup Location',
                         'de-DE' => 'Abholort',
                         Defaults::LANGUAGE_SYSTEM => 'Pickup Location',
                     ],
+                    'componentName' =>   'sw-entity-single-select',
                     'customFieldPosition' => 1,
                 ],
             ],

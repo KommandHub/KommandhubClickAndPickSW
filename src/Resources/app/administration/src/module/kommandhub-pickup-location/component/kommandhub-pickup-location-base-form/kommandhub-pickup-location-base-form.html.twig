@@ -126,23 +126,39 @@
             columns="repeat(auto-fit, minmax(250px, 1fr))"
             gap="0px 32px"
         >
+            {% block kommandhub_pickup_location_base_form_pickupLocation_time_format_field %}
+                <sw-single-select
+                    :value="pickupLocation.timeFormat"
+                    :options="timeFormatOptions"
+                    value-property="value"
+                    label-property="label"
+                    :label="$tc('kommandhub-pickup-location.baseForm.labelTimeFormat')"
+                    :placeholder="$tc('kommandhub-pickup-location.baseForm.placeholderTimeFormat')"
+                    @update:value="onTimeFormatChange"
+                />
+            {% endblock %}
+
             {% block kommandhub_pickup_location_base_form_pickupLocation_opening_hours_field %}
-                <mt-text-field
-                    v-model="pickupLocation.openingHours"
-                    name="sw-field--pickupLocation-openingHours"
+                <sw-single-select
+                    :value="pickupLocation.openingHours"
+                    :options="openingHoursOptions"
+                    value-property="value"
+                    label-property="label"
                     :label="$tc('kommandhub-pickup-location.baseForm.labelOpeningHours')"
                     :placeholder="$tc('kommandhub-pickup-location.baseForm.placeholderOpeningHours')"
-                    :error="pickupLocationOpeningHoursError"
+                    @update:value="onOpeningHoursChange"
                 />
             {% endblock %}
 
             {% block kommandhub_pickup_location_base_form_pickupLocation_closing_hours_field %}
-                <mt-text-field
-                    v-model="pickupLocation.closingHours"
-                    name="sw-field--pickupLocation-closingHours"
+                <sw-single-select
+                    :value="pickupLocation.closingHours"
+                    :options="closingHoursOptions"
+                    value-property="value"
+                    label-property="label"
                     :label="$tc('kommandhub-pickup-location.baseForm.labelClosingHours')"
                     :placeholder="$tc('kommandhub-pickup-location.baseForm.placeholderClosingHours')"
-                    :error="pickupLocationClosingHoursError"
+                    @update:value="onClosingHoursChange"
                 />
             {% endblock %}
         </sw-container>

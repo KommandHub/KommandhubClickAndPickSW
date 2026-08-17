@@ -116,9 +116,9 @@ readonly class ShippingMethodInstaller
                 [
                     'id' => self::DELIVERY_TIME_ID,
                     'name' => '15-30 minutes',
-                    'min' => 0.25,
-                    'max' => 0.5,
-                    'unit' => DeliveryTimeEntity::DELIVERY_TIME_HOUR,
+                    'min' => 1,
+                    'max' => 1,
+                    'unit' => DeliveryTimeEntity::DELIVERY_TIME_DAY,
                 ],
             ], $context);
         }

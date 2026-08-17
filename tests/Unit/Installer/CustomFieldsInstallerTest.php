@@ -56,7 +56,7 @@ class CustomFieldsInstallerTest extends TestCase
                     return $fieldset['name'] === 'kommandhub_click_and_pick_fieldset'
                         && $fieldset['customFields'][0]['name'] === CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD
                         && $fieldset['customFields'][0]['type'] === CustomFieldTypes::ENTITY
-                        && $fieldset['customFields'][0]['entity'] === PickupLocationDefinition::ENTITY_NAME;
+                        && $fieldset['customFields'][0]['config']['entity'] === PickupLocationDefinition::ENTITY_NAME;
                 }),
                 $this->context
             );

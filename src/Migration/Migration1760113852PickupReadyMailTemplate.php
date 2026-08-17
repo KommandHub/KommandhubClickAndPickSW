@@ -102,15 +102,15 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
             [
                 'en-GB' => [
                     'senderName' => '{{ salesChannel.name }}',
-                    'subject' => 'New Order Received - #{{ order.orderNumber }}',
-                    'description' => 'Admin notification when a new order is placed',
+                   'subject' => 'New pickup order received - #{{ order.orderNumber }}',
+                   'description' => 'Internal admin notification when a pickup order is placed',
                     'contentHtml' => $this->getAdminOrderPlacedContentHtmlEn(),
                     'contentPlain' => $this->getAdminOrderPlacedContentPlainEn(),
                 ],
                 'de-DE' => [
                     'senderName' => '{{ salesChannel.name }}',
-                    'subject' => 'Neue Bestellung erhalten - #{{ order.orderNumber }}',
-                    'description' => 'Admin Benachrichtigung bei neuer Bestellung',
+                   'subject' => 'Neue Abholbestellung erhalten - #{{ order.orderNumber }}',
+                   'description' => 'Interne Admin-Benachrichtigung bei einer neuen Abholbestellung',
                     'contentHtml' => $this->getAdminOrderPlacedContentHtmlDe(),
                     'contentPlain' => $this->getAdminOrderPlacedContentPlainDe(),
                 ]
@@ -298,10 +298,10 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
     {
         return <<<MAIL
         Dear {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }},
-        
-        Your order {{ order.orderNumber }} is now ready for pickup. 
+
+        Your order {{ order.orderNumber }} is now ready for pickup.
         Please bring a valid ID and your order confirmation when collecting your order.
-        
+
         Best regards,
         Your {{ salesChannel.name }} Team
         MAIL;
@@ -329,10 +329,10 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
     {
         return <<<MAIL
         Sehr geehrte/r {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }},
-        
-        Ihre Bestellung {{ order.orderNumber }} ist jetzt abholbereit. 
+
+        Ihre Bestellung {{ order.orderNumber }} ist jetzt abholbereit.
         Bitte bringen Sie zur Abholung einen gültigen Ausweis sowie Ihre Bestellbestätigung mit.
-        
+
         Mit freundlichen Grüßen,
         Ihr {{ salesChannel.name }} Team
         MAIL;
@@ -344,16 +344,18 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         return <<<MAIL
         <div style="font-family:arial; font-size:12px;">
             {% set currencyIsoCode = order.currency.isoCode %}
-            We have received a new pickup order from {{ order.orderDateTime|format_datetime('medium', 'short', locale='en-GB') }}.<br>
+            A new pickup order has been placed and requires preparation for collection.<br>
             <br>
             Order number: {{ order.orderNumber }}<br>
+            Customer: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}<br>
+            Ordered on: {{ order.orderDateTime|format_datetime('medium', 'short', locale='en-GB') }}<br>
             <br>
-            Please prepare the order for the customer to pick up. <br>
+            Please prepare the order for pickup and ensure it is ready when the customer arrives.<br>
             <br>
-            
-            <strong>Information on your order:</strong><br>
+
+            <strong>Order details:</strong><br>
             <br>
-        
+
             <table border="0" style="font-family:Arial, Helvetica, sans-serif; font-size:12px;">
                 <tr>
                     <td bgcolor="#F7F7F2" style="border-bottom:1px solid #cccccc;"><strong>Prod. no.</strong></td>
@@ -363,7 +365,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     <td bgcolor="#F7F7F2" style="border-bottom:1px solid #cccccc;"><strong>Price</strong></td>
                     <td bgcolor="#F7F7F2" style="border-bottom:1px solid #cccccc;"><strong>Total</strong></td>
                 </tr>
-        
+
                 {% for lineItem in order.nestedLineItems %}
                     {% set nestingLevel = 0 %}
                     {% set nestedItem = lineItem %}
@@ -385,11 +387,11 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                                 </span>
                                     {% endfor %}
                                 {% endif %}
-        
+
                                 <div{% if nestingLevel > 0 %} style="padding-left: {{ (nestingLevel + 1) * 10 }}px"{% endif %}>
                                     {{ nestedItem.label|u.wordwrap(80) }}
                                 </div>
-        
+
                                 {% if nestedItem.payload.options is defined and nestedItem.payload.options|length >= 1 %}
                                     <div>
                                         {% for option in nestedItem.payload.options %}
@@ -400,7 +402,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                                         {% endfor %}
                                     </div>
                                 {% endif %}
-        
+
                                 {% if nestedItem.payload.features is defined and nestedItem.payload.features|length >= 1 %}
                                     {% set referencePriceFeatures = nestedItem.payload.features|filter(feature => feature.type == 'referencePrice') %}
                                     {% if referencePriceFeatures|length >= 1 %}
@@ -416,7 +418,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                             <td>{{ nestedItem.unitPrice|currency(currencyIsoCode) }}</td>
                             <td>{{ nestedItem.totalPrice|currency(currencyIsoCode) }}</td>
                         </tr>
-        
+
                         {% if nestedItem.children.count > 0 %}
                             {% set nestingLevel = nestingLevel + 1 %}
                             {% for lineItem in nestedItem.children %}
@@ -427,9 +429,9 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     {% endblock %}
                 {% endfor %}
             </table>
-        
+
             {% set delivery = order.deliveries.first %}
-        
+
             {% set displayRounded = order.totalRounding.interval != 0.01 or order.totalRounding.decimals != order.itemRounding.decimals %}
             {% set decimals = order.totalRounding.decimals %}
             {% set total = order.price.totalPrice %}
@@ -443,7 +445,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                 {% for shippingCost in order.deliveries %}
                     Shipping costs: {{ shippingCost.shippingCosts.totalPrice|currency(currencyIsoCode) }}<br>
                 {% endfor %}
-        
+
                 Net total: {{ order.amountNet|currency(currencyIsoCode) }}<br>
                 {% for calculatedTax in order.price.calculatedTaxes %}
                     {% if order.taxStatus is same as('net') %}plus{% else %}including{% endif %} {{ calculatedTax.taxRate }}% VAT. {{ calculatedTax.tax|currency(currencyIsoCode) }}<br>
@@ -453,19 +455,19 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     <strong>Rounded total gross: {{ order.price.totalPrice|currency(currencyIsoCode,decimals=order.totalRounding.decimals) }}</strong><br>
                 {% endif %}
                 <br>
-        
+
                 {% if order.transactions is defined and order.transactions is not empty %}
                     <strong>Selected payment type:</strong> {{ order.transactions.first.paymentMethod.translated.name }}<br>
                     {{ order.transactions.first.paymentMethod.translated.description }}<br>
                     <br>
                 {% endif %}
-        
+
                 {% if delivery %}
                     <strong>Selected shipping type:</strong> {{ delivery.shippingMethod.translated.name }}<br>
                     {{ delivery.shippingMethod.translated.description }}<br>
                     <br>
                 {% endif %}
-        
+
                 {% set billingAddress = order.addresses.get(order.billingAddressId) %}
                 <strong>Billing address:</strong><br>
                 {{ billingAddress.company }}<br>
@@ -474,7 +476,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                 {{ billingAddress.zipcode }} {{ billingAddress.city }}<br>
                 {{ billingAddress.country.translated.name }}<br>
                 <br>
-        
+
                 {% if delivery %}
                     <strong>Shipping address:</strong><br>
                     {{ delivery.shippingOrderAddress.company }}<br>
@@ -485,17 +487,16 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     <br>
                 {% endif %}
                 {% if order.orderCustomer.vatIds %}
-                    Your VAT-ID: {{ order.orderCustomer.vatIds|first }}
-                    In case of a successful order and if you are based in one of the EU countries, you will receive your goods exempt from turnover tax.<br>
+                    Customer VAT-ID: {{ order.orderCustomer.vatIds|first }}<br>
                 {% endif %}
                 <br>
-                You can check the current status of your order on our website under "My account" - "My orders" anytime: {{ rawUrl('frontend.account.order.single.page', { 'deepLinkCode': order.deepLinkCode }, salesChannel.domains|first.url) }}
+                Please verify the order details, selected payment method, and shipping information before handing over the pickup.
                 <br>
-                If you have any questions, do not hesitate to contact us.
+                If additional customer communication is required, follow up directly with the customer using the contact details on the order.
                 <br>
                 {% if a11yDocuments is defined and a11yDocuments is not empty %}
                     <br>
-                    For better accessibility we also provide an HTML version of the documents here:<br><br>
+                    Accessible order documents are available for internal review:<br><br>
                     <ul>
                         {% for a11y in a11yDocuments %}
                             {% set documentLink = rawUrl(
@@ -510,8 +511,6 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                             <li><a href="{{ documentLink }}" target="_blank">{{ documentLink }}</a></li>
                         {% endfor %}
                     </ul>
-                    For data protection reasons the HTML version requires a login. <br><br>
-                    In case of a guest order, you can use your mail address and postal code of the billing address.<br>
                 {% endif %}
             </p>
             <br>
@@ -523,14 +522,16 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
     {
         return <<<MAIL
         {% set currencyIsoCode = order.currency.isoCode %}
-        We have received a new pickup order from {{ order.orderDateTime|format_datetime('medium', 'short', locale='en-GB') }}.
-        
+        A new pickup order has been placed and requires preparation for collection.
+
         Order number: {{ order.orderNumber }}
-        
-        Please prepare the order for the customer to pick up.
-        
-        Information on your order:
-        
+        Customer: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}
+        Ordered on: {{ order.orderDateTime|format_datetime('medium', 'short', locale='en-GB') }}
+
+        Please prepare the order for pickup and ensure it is ready when the customer arrives.
+
+        Order details:
+
         {% for lineItem in order.lineItems %}
         Pos. {{ loop.index }}
         ---------------------
@@ -556,7 +557,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         Quantity {{ lineItem.quantity }},
         Price {{ lineItem.unitPrice|currency(currencyIsoCode) }},
         Total {{ lineItem.totalPrice|currency(currencyIsoCode) }},
-        
+
         {% endfor %}
         {% set delivery = order.deliveries.first %}
         {% set displayRounded = order.totalRounding.interval != 0.01 or order.totalRounding.decimals != order.itemRounding.decimals %}
@@ -577,12 +578,12 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         {% if displayRounded %}
         Rounded total gross: {{ order.price.totalPrice|currency(currencyIsoCode,decimals=order.totalRounding.decimals) }}
         {% endif %}
-        
+
         {% if order.transactions is defined and order.transactions is not empty %}
         Selected payment type: {{ order.transactions.first.paymentMethod.translated.name }}
         {{ order.transactions.first.paymentMethod.translated.description }}
         {% endif %}
-        
+
         {% if delivery %}
         Selected shipping type: {{ delivery.shippingMethod.translated.name }}
         {{ delivery.shippingMethod.translated.description }}
@@ -594,7 +595,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         {{ billingAddress.street }}
         {{ billingAddress.zipcode }} {{ billingAddress.city }}
         {{ billingAddress.country.translated.name }}
-        
+
         {% if delivery %}
         Shipping address:
         {{ delivery.shippingOrderAddress.company }}
@@ -603,18 +604,17 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         {{ delivery.shippingOrderAddress.zipcode}} {{ delivery.shippingOrderAddress.city }}
         {{ delivery.shippingOrderAddress.country.translated.name }}
         {% endif %}
-        
+
         {% if order.orderCustomer.vatIds %}
-        Your VAT-ID: {{ order.orderCustomer.vatIds|first }}
-        In case of a successful order and if you are based in one of the EU countries, you will receive your goods exempt from turnover tax.
-        
+        Customer VAT-ID: {{ order.orderCustomer.vatIds|first }}
         {% endif %}
-        You can check the current status of your order on our website under "My account" - "My orders" anytime: {{ rawUrl('frontend.account.order.single.page', { 'deepLinkCode': order.deepLinkCode }, salesChannel.domains|first.url) }}
-        If you have any questions, do not hesitate to contact us.
-        
+
+        Please verify the order details, selected payment method, and shipping information before handing over the pickup.
+        If additional customer communication is required, follow up directly with the customer using the contact details on the order.
+
         {% if a11yDocuments is defined and a11yDocuments is not empty %}
-        For better accessibility we also provide an HTML version of the documents here:
-        
+        Accessible order documents are available for internal review:
+
         {% for a11y in a11yDocuments %}
         {% set documentLink = rawUrl(
             'frontend.account.order.single.document.a11y',
@@ -627,9 +627,6 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         )%}
         - {{ documentLink }}
         {% endfor %}
-        
-        For data protection reasons the HTML version requires a login.
-        In case of a guest order, you can use your mail address and postal code of the billing address.
         {% endif %}
         MAIL;
     }
@@ -641,17 +638,19 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         <div style="font-family:arial; font-size:12px;">
 
             {% set currencyIsoCode = order.currency.isoCode %}
-        
-            Wir haben am {{ order.orderDateTime|format_datetime('medium', 'short', locale='de-DE') }} eine neue Abholbestellung erhalten.<br>
+
+            Eine neue Abholbestellung wurde aufgegeben und muss für die Abholung vorbereitet werden.<br>
             <br>
             Bestellnummer: {{ order.orderNumber }}<br>
+            Kunde: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}<br>
+            Bestelldatum: {{ order.orderDateTime|format_datetime('medium', 'short', locale='de-DE') }}<br>
             <br>
             Bitte bereiten Sie die Bestellung zur Abholung durch den Kunden vor.<br>
 
             <br>
-            <strong>Informationen zu Ihrer Bestellung:</strong><br>
+            <strong>Bestelldetails:</strong><br>
             <br>
-        
+
             <table border="0" style="font-family:Arial, Helvetica, sans-serif; font-size:12px;">
                 <tr>
                     <td bgcolor="#F7F7F2" style="border-bottom:1px solid #cccccc;"><strong>Produkt-Nr.</strong></td>
@@ -661,7 +660,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     <td bgcolor="#F7F7F2" style="border-bottom:1px solid #cccccc;"><strong>Preis</strong></td>
                     <td bgcolor="#F7F7F2" style="border-bottom:1px solid #cccccc;"><strong>Summe</strong></td>
                 </tr>
-        
+
                 {% for lineItem in order.nestedLineItems %}
                     {% set nestingLevel = 0 %}
                     {% set nestedItem = lineItem %}
@@ -683,11 +682,11 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                                     </span>
                                     {% endfor %}
                                 {% endif %}
-        
+
                                 <div{% if nestingLevel > 0 %} style="padding-left: {{ (nestingLevel + 1) * 10 }}px"{% endif %}>
                                     {{ nestedItem.label|u.wordwrap(80) }}
                                 </div>
-        
+
                                 {% if nestedItem.payload.options is defined and nestedItem.payload.options|length >= 1 %}
                                     <div>
                                         {% for option in nestedItem.payload.options %}
@@ -698,7 +697,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                                         {% endfor %}
                                     </div>
                                 {% endif %}
-        
+
                                 {% if nestedItem.payload.features is defined and nestedItem.payload.features|length >= 1 %}
                                     {% set referencePriceFeatures = nestedItem.payload.features|filter(feature => feature.type == 'referencePrice') %}
                                     {% if referencePriceFeatures|length >= 1 %}
@@ -714,7 +713,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                             <td>{{ nestedItem.unitPrice|currency(currencyIsoCode) }}</td>
                             <td>{{ nestedItem.totalPrice|currency(currencyIsoCode) }}</td>
                         </tr>
-        
+
                         {% if nestedItem.children.count > 0 %}
                             {% set nestingLevel = nestingLevel + 1 %}
                             {% for lineItem in nestedItem.children %}
@@ -725,9 +724,9 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     {% endblock %}
                 {% endfor %}
             </table>
-        
+
             {% set delivery = order.deliveries.first %}
-        
+
             {% set displayRounded = order.totalRounding.interval != 0.01 or order.totalRounding.decimals != order.itemRounding.decimals %}
             {% set decimals = order.totalRounding.decimals %}
             {% set total = order.price.totalPrice %}
@@ -750,19 +749,19 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     <strong>Gesamtkosten Brutto gerundet: {{ order.price.totalPrice|currency(currencyIsoCode,decimals=order.totalRounding.decimals) }}</strong><br>
                 {% endif %}
                 <br>
-        
+
                 {% if order.transactions is defined and order.transactions is not empty %}
                     <strong>Gewählte Zahlungsart:</strong> {{ order.transactions.first.paymentMethod.translated.name }}<br>
                     {{ order.transactions.first.paymentMethod.translated.description }}<br>
                     <br>
                 {% endif %}
-        
+
                 {% if delivery %}
                     <strong>Gewählte Versandart:</strong> {{ delivery.shippingMethod.translated.name }}<br>
                     {{ delivery.shippingMethod.translated.description }}<br>
                     <br>
                 {% endif %}
-        
+
                 {% set billingAddress = order.addresses.get(order.billingAddressId) %}
                 <strong>Rechnungsadresse:</strong><br>
                 {{ billingAddress.company }}<br>
@@ -771,7 +770,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                 {{ billingAddress.zipcode }} {{ billingAddress.city }}<br>
                 {{ billingAddress.country.translated.name }}<br>
                 <br>
-        
+
                 {% if delivery %}
                     <strong>Lieferadresse:</strong><br>
                     {{ delivery.shippingOrderAddress.company }}<br>
@@ -782,18 +781,16 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                     <br>
                 {% endif %}
                 {% if order.orderCustomer.vatIds %}
-                    Ihre Umsatzsteuer-ID: {{ order.orderCustomer.vatIds|first }}
-                    Bei erfolgreicher Prüfung und sofern Sie aus dem EU-Ausland
-                    bestellen, erhalten Sie Ihre Ware umsatzsteuerbefreit. <br>
+                    Kunden-USt-ID: {{ order.orderCustomer.vatIds|first }}<br>
                 {% endif %}
                 <br>
-                Den aktuellen Status Ihrer Bestellung können Sie auch jederzeit auf unserer Webseite im  Bereich "Mein Konto" - "Meine Bestellungen" abrufen: {{ rawUrl('frontend.account.order.single.page', { 'deepLinkCode': order.deepLinkCode }, salesChannel.domains|first.url) }}
+                Bitte prüfen Sie die Bestelldaten, die gewählte Zahlungsart und die Versandinformationen, bevor Sie die Abholung an den Kunden übergeben.
                 <br>
-                Für Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.
+                Wenn weitere Kundenkommunikation erforderlich ist, nehmen Sie direkt mit dem Kunden Kontakt auf.
                 <br>
                 {% if a11yDocuments is defined and a11yDocuments is not empty %}
                     <br>
-                    Folgend stellen wir barrierefreie Dokumente als HTML-Version zur Verfügung:<br><br>
+                    Barrierefreie Dokumente stehen zur internen Prüfung zur Verfügung:<br><br>
                     <ul>
                         {% for a11y in a11yDocuments %}
                             {% set documentLink = rawUrl(
@@ -808,8 +805,6 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
                             <li><a href="{{ documentLink }}" target="_blank">{{ documentLink }}</a></li>
                         {% endfor %}
                     </ul>
-                    Aus Datenschutzgründen ist für die HTML-Version ein Login erforderlich.<br><br>
-                    Im Falle einer Gastbestellung können Sie Ihre Postanschrift und die Postleitzahl der Rechnungsanschrift verwenden.<br>
                 {% endif %}
             </p>
             <br>
@@ -821,14 +816,16 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
     {
         return <<<MAIL
         {% set currencyIsoCode = order.currency.isoCode %}
-        Wir haben am {{ order.orderDateTime|format_datetime('medium', 'short', locale='de-DE') }} eine neue Abholbestellung erhalten.<br>
-        
+        Eine neue Abholbestellung wurde aufgegeben und muss für die Abholung vorbereitet werden.
+
         Bestellnummer: {{ order.orderNumber }}
-        
-        Bitte bereiten Sie die Bestellung zur Abholung durch den Kunden vor.
-        
-        Informationen zu Ihrer Bestellung:
-        
+        Kunde: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}
+        Bestelldatum: {{ order.orderDateTime|format_datetime('medium', 'short', locale='de-DE') }}
+
+        Bitte bereiten Sie die Bestellung zur Abholung vor und stellen Sie sicher, dass sie zum Zeitpunkt der Abholung bereit ist.
+
+        Bestelldetails:
+
         {% for lineItem in order.lineItems %}
         Pos. {{ loop.index }}
         ---------------------
@@ -854,7 +851,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         Menge {{ lineItem.quantity }},
         Preis {{ lineItem.unitPrice|currency(currencyIsoCode) }},
         Summe {{ lineItem.totalPrice|currency(currencyIsoCode) }},
-        
+
         {% endfor %}
         {% set delivery = order.deliveries.first %}
         {% set displayRounded = order.totalRounding.interval != 0.01 or order.totalRounding.decimals != order.itemRounding.decimals %}
@@ -875,12 +872,12 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         {% if displayRounded %}
         Gesamtkosten Brutto gerundet: {{ order.price.totalPrice|currency(currencyIsoCode,decimals=order.totalRounding.decimals) }}
         {% endif %}
-        
+
         {% if order.transactions is defined and order.transactions is not empty %}
         Gewählte Zahlungsart: {{ order.transactions.first.paymentMethod.translated.name }}
         {{ order.transactions.first.paymentMethod.translated.description }}
         {% endif %}
-        
+
         {% if delivery %}
         Gewählte Versandart: {{ delivery.shippingMethod.translated.name }}
         {{ delivery.shippingMethod.translated.description }}
@@ -892,7 +889,7 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         {{ billingAddress.street }}
         {{ billingAddress.zipcode }} {{ billingAddress.city }}
         {{ billingAddress.country.translated.name }}
-        
+
         {% if delivery %}
         Lieferadresse:
         {{ delivery.shippingOrderAddress.company }}
@@ -901,19 +898,17 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         {{ delivery.shippingOrderAddress.zipcode}} {{ delivery.shippingOrderAddress.city }}
         {{ delivery.shippingOrderAddress.country.translated.name }}
         {% endif %}
-        
+
         {% if order.orderCustomer.vatIds %}
-        Ihre Umsatzsteuer-ID: {{ order.orderCustomer.vatIds|first }}
-        Bei erfolgreicher Prüfung und sofern Sie aus dem EU-Ausland
-        bestellen, erhalten Sie Ihre Ware umsatzsteuerbefreit.
-        
+        Kunden-USt-ID: {{ order.orderCustomer.vatIds|first }}
         {% endif %}
-        Den aktuellen Status Ihrer Bestellung können Sie auch jederzeit auf unserer Webseite im Bereich "Mein Konto" - "Meine Bestellungen" abrufen: {{ rawUrl('frontend.account.order.single.page', { 'deepLinkCode': order.deepLinkCode }, salesChannel.domains|first.url) }}
-        Für Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.
-        
+
+        Bitte prüfen Sie die Bestelldaten, die gewählte Zahlungsart und die Versandinformationen, bevor Sie die Abholung an den Kunden übergeben.
+        Wenn weitere Kundenkommunikation erforderlich ist, nehmen Sie direkt mit dem Kunden Kontakt auf.
+
         {% if a11yDocuments is defined and a11yDocuments is not empty %}
-        Folgend stellen wir barrierefreie Dokumente als HTML-Version zur Verfügung:
-        
+        Barrierefreie Dokumente stehen zur internen Prüfung zur Verfügung:
+
         {% for a11y in a11yDocuments %}
         {% set documentLink = rawUrl(
             'frontend.account.order.single.document.a11y',
@@ -926,9 +921,6 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         )%}
         - {{ documentLink }}
         {% endfor %}
-        
-        Aus Datenschutzgründen ist für die HTML-Version ein Login erforderlich.
-        Im Falle einer Gastbestellung können Sie Ihre Postanschrift und die Postleitzahl der Rechnungsanschrift verwenden.
         {% endif %}
         MAIL;
     }

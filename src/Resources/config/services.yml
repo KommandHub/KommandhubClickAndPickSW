@@ -25,3 +25,13 @@ services:
       $logger: '@logger'
     tags:
       - { name: 'flow.action', priority: 500, key: 'action.kommandhub.pickup.notify_admin' }
+
+  # SMS Flow Builder action. Soft dependency on KommandhubSmsSW: its gateway is
+  # referenced with `@?` so the argument is null when that plugin is not
+  # installed/active, and the action then does nothing (see the action class).
+  Kommandhub\ClickAndPickSW\Flow\Action\SendSmsToPickupLocationAction:
+    arguments:
+      $logger: '@logger'
+      $smsGateway: '@?Kommandhub\SmsSW\Notification\Gateway\NotificationGatewayInterface'
+    tags:
+      - { name: 'flow.action', priority: 500, key: 'action.kommandhub.pickup.notify_sms' }

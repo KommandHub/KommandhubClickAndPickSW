@@ -1,6 +1,6 @@
 {
   "main.js": {
-    "file": "assets/kommandhub-click-and-pick-s-w-ODwYJdEf.js",
+    "file": "assets/kommandhub-click-and-pick-s-w-D3Nvr7-q.js",
     "name": "kommandhub-click-and-pick-s-w",
     "src": "main.js",
     "isEntry": true,
@@ -11,7 +11,7 @@
     ]
   },
   "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js": {
-    "file": "assets/index-BnzVfnlI.js",
+    "file": "assets/index-CjpWOvYc.js",
     "name": "index",
     "src": "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js",
     "isDynamicEntry": true

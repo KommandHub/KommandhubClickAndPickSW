@@ -65,9 +65,15 @@ home per class.
 - `Flow/` — Flow Builder integration: `Aware/PickupLocationAware` (the reusable
   data contract pickup events implement), `Storer/PickupLocationFlowStorer`
   (stores the location id, lazily reloads the entity; auto-tagged `flow.storer`),
-  and `Action/SendPickupNotificationToAdminAction` (emails the pickup location so
+  `Action/SendPickupNotificationToAdminAction` (emails the pickup location so
   it can prepare the order — requires `OrderAware` + `PickupLocationAware`;
-  tagged `flow.action` in `services.yml` since that tag is not autoconfigured).
+  tagged `flow.action` in `services.yml` since that tag is not autoconfigured),
+  and `Action/SendSmsToPickupLocationAction` (texts the location's phone). The
+  SMS action has a **soft dependency** on `KommandhubSmsSW` — not in composer:
+  its gateway is injected with `@?Kommandhub\SmsSW\…\NotificationGatewayInterface`
+  (null when that plugin is absent/inactive), typed `?object`, and used by duck
+  typing against the local `Flow/Sms/SmsGateway` interface (which nothing
+  implements — it exists only to type the call sites). Null gateway → no-op.
   The `pickup.order.placed → notify admin` flow is created by
   `Migration…AddPickupAdminNotificationFlow`, so the admin mail is sent
   exclusively through Flow Builder, not from `OrderListener`. The action's

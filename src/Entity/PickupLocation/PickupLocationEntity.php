@@ -20,6 +20,7 @@ class PickupLocationEntity extends Entity
     protected ?string $additionalAddressLine2 = null;
     protected string $city;
     protected string $postalCode;
+    protected ?string $timeFormat = '24h';
     protected ?string $openingHours = null;
     protected ?string $closingHours = null;
     protected ?array $openDays = null;
@@ -89,6 +90,16 @@ class PickupLocationEntity extends Entity
     public function setLatitude(?string $latitude): void
     {
         $this->latitude = $latitude;
+    }
+
+    public function getTimeFormat(): ?string
+    {
+        return $this->timeFormat;
+    }
+
+    public function setTimeFormat(?string $timeFormat): void
+    {
+        $this->timeFormat = $timeFormat ?? '24h';
     }
 
     public function getClosingHours(): ?string

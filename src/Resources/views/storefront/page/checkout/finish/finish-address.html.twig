@@ -6,7 +6,7 @@
 
     {% if order.extensions.pickupLocation is not null %}
         {% block component_shipping_method_label_kommandhub_self_pickup_location_field_info %}
-            {% sw_include '@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-location-field-info.html.twig' with { location: order.extensions.pickupLocation } %}
+            {% sw_include '@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-location-field-info.html.twig' with { location: order.extensions.pickupLocation, hideRemoveButton: true } %}
         {% endblock %}
     {% endif %}
 {% endblock %}
