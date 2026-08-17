@@ -105,6 +105,7 @@ readonly class SwitchContextEventListener
         // Add the pickup location as an extension to the context.
         $context->addExtension(self::PICKUP_LOCATION_EXTENSION, new ArrayStruct([
             'id' => $pickupLocationId,
+            self::PICKUP_LOCATION_ID => $pickupLocationId,
         ]));
     }
 

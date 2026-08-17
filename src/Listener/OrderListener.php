@@ -7,6 +7,7 @@ namespace Kommandhub\ClickAndPickSW\Listener;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Event\PickupOrderPlacedEvent;
 use Kommandhub\ClickAndPickSW\Installer\CustomFieldsInstaller;
+use Kommandhub\ClickAndPickSW\PickupLocation\PickupLocationSelectionResolver;
 use Shopware\Core\Checkout\Cart\Event\CheckoutOrderPlacedEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Checkout\Order\OrderEvents;
@@ -35,6 +36,7 @@ readonly class OrderListener
     public function __construct(
         private EntityRepository $orderRepository,
         private EntityRepository $kommandhubPickupLocationRepository,
+        private PickupLocationSelectionResolver $pickupLocationSelectionResolver,
         private EventDispatcherInterface $eventDispatcher,
     ) {
     }
@@ -48,27 +50,21 @@ readonly class OrderListener
     public function onCheckoutOrderPlacedEvent(CheckoutOrderPlacedEvent $event): void
     {
         $salesChannelContext = $event->getSalesChannelContext();
-        $context = $salesChannelContext->getContext();
 
-        $pickupLocationId = $this->extractPickupLocationId($salesChannelContext);
-
-        if ($pickupLocationId === null) {
+        if (!$this->pickupLocationSelectionResolver->isPickupShippingMethod($salesChannelContext)) {
             return;
         }
 
-        $order = $event->getOrder();
-
-        // Resolve the location first. A missing entity (deleted/invalid id) means
-        // this is not a valid pickup order — persist nothing and skip the flow
-        // trigger, so the order never stores a dangling reference. Normal
-        // delivery orders never get here (no pickup extension).
-        $pickupLocation = $this->getPickupLocation($pickupLocationId, $context);
+        $pickupLocation = $this->pickupLocationSelectionResolver->resolve($salesChannelContext);
 
         if ($pickupLocation === null) {
             return;
         }
 
-        $this->updateOrderWithPickupLocation($order, $pickupLocationId, $context);
+        $order = $event->getOrder();
+        $context = $salesChannelContext->getContext();
+
+        $this->updateOrderWithPickupLocation($order, $pickupLocation->getId(), $context);
         $this->dispatchPickupOrderPlacedEvent($order, $pickupLocation, $salesChannelContext);
     }
 
@@ -97,32 +93,6 @@ readonly class OrderListener
         }
 
         $this->attachPickupLocations($event, $orderLocationMap, $pickupLocations);
-    }
-
-    /**
-     * Fetch pickup location entity.
-     */
-    private function getPickupLocation(string $id, Context $context): ?PickupLocationEntity
-    {
-        $entity = $this->kommandhubPickupLocationRepository
-            ->search(new Criteria([$id]), $context)
-            ->first();
-
-        return $entity instanceof PickupLocationEntity ? $entity : null;
-    }
-
-    /**
-     * Extract pickup location ID from context extension.
-     */
-    private function extractPickupLocationId(SalesChannelContext $context): ?string
-    {
-        $extension = $context->getExtension(self::PICKUP_LOCATION_EXTENSION);
-
-        $pickupLocationId = $extension?->getVars()['id'] ?? null;
-
-        return \is_string($pickupLocationId) && $pickupLocationId !== ''
-            ? $pickupLocationId
-            : null;
     }
 
     /**

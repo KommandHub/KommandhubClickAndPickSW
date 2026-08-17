@@ -186,6 +186,10 @@ class SwitchContextEventListenerTest extends TestCase
 
         static::assertNotNull($extension);
         static::assertSame(self::PICKUP_LOCATION_ID, $extension->getVars()['id']);
+        static::assertSame(
+            self::PICKUP_LOCATION_ID,
+            $extension->getVars()[SwitchContextEventListener::PICKUP_LOCATION_ID]
+        );
     }
 
     public function testOnSalesChannelContextResolvedIgnoresMissingPayload(): void
