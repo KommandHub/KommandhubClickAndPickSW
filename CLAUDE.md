@@ -33,8 +33,20 @@ top-level directory *is* a boundary; inside it, flat Symfony-idiomatic folders
 home per class.
 
 - `Entity/PickupLocation/` — the `kommandhub_pickup_location` DAL entity
-  (definition/entity/collection) and its `Aggregate/…SalesChannelMapping/`
-  many-to-many join to `sales_channel`.
+  (definition/entity/collection), its `Aggregate/…SalesChannelMapping/`
+  many-to-many join to `sales_channel`, and the normalized schedule aggregates
+  `Aggregate/PickupLocationOpeningHour` (weekly interval rows, ISO `dayOfWeek`
+  1–7, `HH:MM` local times) and `Aggregate/PickupLocationSpecialHour` (date
+  overrides: closures or exceptional hours). The location carries an IANA
+  `timezone`; the legacy `openDays`/`openingHours`/`closingHours` fields are kept
+  **deprecated** for one release (backfilled, not written by the UI).
+- `PickupLocation/Availability/` — `PickupLocationAvailabilityService`
+  (`isOpenAt`/`filterOpen`) decides openness **in the location's own timezone**:
+  local date+weekday, special-date override wins, else the weekly schedule,
+  `[open, close)` boundaries, overnight-wrap supported. Pure/stateless — the
+  caller loads `openingHoursSchedule` + `specialHours` once and evaluates every
+  location without extra queries. `Weekday` maps names↔ISO. This is the seam for
+  future cutoff/blackout/capacity rules.
 - `Entity/Order/Aggregated/OrderDelivery/` — constants for the added
   `ready_for_pickup` delivery state and its transitions.
 - `Checkout/Cart/` — `PayOnPickupCartProcessor` (a `CartValidatorInterface` that

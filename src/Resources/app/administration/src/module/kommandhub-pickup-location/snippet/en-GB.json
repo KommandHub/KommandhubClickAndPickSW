@@ -1,5 +1,28 @@
 {
   "kommandhub-pickup-location": {
+    "schedule": {
+      "cardTitle": "Opening schedule",
+      "labelTimezone": "Timezone",
+      "helpTimezone": "IANA timezone used to evaluate availability (e.g. Europe/Berlin). Opening times are local to this zone.",
+      "addInterval": "Add interval",
+      "labelOpen": "Opens",
+      "labelClose": "Closes",
+      "remove": "Remove",
+      "specialTitle": "Special dates & holidays",
+      "addSpecial": "Add special date",
+      "labelDate": "Date",
+      "labelClosed": "Closed",
+      "errorInvalidTime": "Enter a valid time (HH:MM).",
+      "errorOrder": "Closing time must be after opening time.",
+      "errorOverlap": "This interval overlaps another on the same day.",
+      "weeklyTitle": "Weekly schedule",
+      "labelSummary": "Summary",
+      "closed": "Closed",
+      "intervalsCount": "interval(s)",
+      "specialSummary": "{count} special dates configured",
+      "summaryEmpty": "No schedule configured",
+      "summaryClosed": "Closed all week"
+    },
     "general": {
       "title": "Pickup Locations",
       "mainMenuItemGeneral": "Pickup Locations",

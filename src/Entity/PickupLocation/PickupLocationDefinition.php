@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Entity\PickupLocation;
 
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationOpeningHour\PickupLocationOpeningHourDefinition;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSalesChannelMapping\PickupLocationSalesChannelMappingDefinition;
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSpecialHour\PickupLocationSpecialHourDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\BoolField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\CreatedAtField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\ApiAware;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\CascadeDelete;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyAssociationField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\OneToManyAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StringField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\UpdatedAtField;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
@@ -53,6 +57,11 @@ class PickupLocationDefinition extends EntityDefinition
             (new StringField('city', 'city'))->addFlags(new Required(), new ApiAware()),
             (new StringField('postal_code', 'postalCode'))->addFlags(new Required(), new ApiAware()),
             (new StringField('time_format', 'timeFormat'))->addFlags(new ApiAware()),
+            // IANA timezone (e.g. "Europe/Berlin"). Availability is evaluated in
+            // this zone; opening/closing times are local wall-clock, never UTC.
+            (new StringField('timezone', 'timezone'))->addFlags(new ApiAware()),
+            // @deprecated superseded by the openingHours/specialHours associations.
+            // Kept for one release for backfill + backward compatibility.
             (new StringField('opening_hours', 'openingHours'))->addFlags(new ApiAware()),
             (new StringField('closing_hours', 'closingHours'))->addFlags(new ApiAware()),
             (new JsonField('open_days', 'openDays'))->addFlags(new ApiAware()),
@@ -71,6 +80,20 @@ class PickupLocationDefinition extends EntityDefinition
                 'pickup_location_id',
                 'sales_channel_id',
             ),
+
+            (new OneToManyAssociationField(
+                'openingHoursSchedule',
+                PickupLocationOpeningHourDefinition::class,
+                'pickup_location_id',
+                'id'
+            ))->addFlags(new CascadeDelete(), new ApiAware()),
+
+            (new OneToManyAssociationField(
+                'specialHours',
+                PickupLocationSpecialHourDefinition::class,
+                'pickup_location_id',
+                'id'
+            ))->addFlags(new CascadeDelete(), new ApiAware()),
         ]);
     }
 }

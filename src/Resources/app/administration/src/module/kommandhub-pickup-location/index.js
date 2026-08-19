@@ -10,6 +10,12 @@ Component.register(
     () => import('./component/kommandhub-pickup-location-base-form')
 );
 
+// Schedule editor (timezone, weekly opening intervals, special-date overrides)
+Component.register(
+    'kommandhub-pickup-location-schedule',
+    () => import('./component/kommandhub-pickup-location-schedule')
+);
+
 // Register page components for listing and creating pickup locations
 Component.register(
     'kommandhub-pickup-location-list',

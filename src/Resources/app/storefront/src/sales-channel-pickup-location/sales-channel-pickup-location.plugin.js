@@ -59,9 +59,30 @@ export default class SalesChannelPickupLocationPlugin extends PluginBaseClass {
             }
 
             container.innerHTML = data;
-            this._updateSelectedPickupLocationOptionData();
+            this._updateSelectedPickupLocationOptionData(container);
         } catch (error) {
             console.error('There was a problem with the fetch operation:', error);
+        }
+    }
+
+    /**
+     * Re-applies the previously selected pickup location to the freshly injected
+     * option list, if that option is still present.
+     *
+     * @param {HTMLSelectElement} select
+     * @private
+     */
+    _updateSelectedPickupLocationOptionData(select) {
+        const selectedId = this.options.selectedPickupLocationId;
+
+        if (!selectedId || !select) {
+            return;
+        }
+
+        const hasOption = Array.from(select.options).some((option) => option.value === selectedId);
+
+        if (hasOption) {
+            select.value = selectedId;
         }
     }
 }

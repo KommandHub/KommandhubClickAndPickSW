@@ -1,5 +1,28 @@
 {
   "kommandhub-pickup-location": {
+    "schedule": {
+      "cardTitle": "Öffnungszeiten",
+      "labelTimezone": "Zeitzone",
+      "helpTimezone": "IANA-Zeitzone zur Bewertung der Verfügbarkeit (z. B. Europe/Berlin). Öffnungszeiten sind lokal zu dieser Zone.",
+      "addInterval": "Intervall hinzufügen",
+      "labelOpen": "Öffnet",
+      "labelClose": "Schließt",
+      "remove": "Entfernen",
+      "specialTitle": "Sondertermine & Feiertage",
+      "addSpecial": "Sondertermin hinzufügen",
+      "labelDate": "Datum",
+      "labelClosed": "Geschlossen",
+      "errorInvalidTime": "Gültige Uhrzeit eingeben (HH:MM).",
+      "errorOrder": "Schließzeit muss nach der Öffnungszeit liegen.",
+      "errorOverlap": "Dieses Intervall überschneidet sich mit einem anderen am selben Tag.",
+      "weeklyTitle": "Wochenplan",
+      "labelSummary": "Zusammenfassung",
+      "closed": "Geschlossen",
+      "intervalsCount": "Intervall(e)",
+      "specialSummary": "{count} Sondertermine konfiguriert",
+      "summaryEmpty": "Kein Zeitplan konfiguriert",
+      "summaryClosed": "Die ganze Woche geschlossen"
+    },
     "general": {
       "title": "Abholorte",
       "mainMenuItemGeneral": "Abholorte",

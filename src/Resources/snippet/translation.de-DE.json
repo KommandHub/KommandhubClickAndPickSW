@@ -1,11 +1,13 @@
 {
   "checkout": {
     "kommandhub-click-and-pick": {
+      "pickupLocationRequired": "Bitte wählen Sie einen gültigen Abholort aus, bevor Sie Ihre Bestellung aufgeben.",
       "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus."
     }
   },
   "error": {
     "kommandhub-click-and-pick": {
+      "pickupLocationRequired": "Bitte wählen Sie einen gültigen Abholort aus, bevor Sie Ihre Bestellung aufgeben.",
       "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus."
     }
   },
@@ -21,6 +23,7 @@
         "sunday": "Sonntag"
       },
       "locationInfoFields": {
+        "closed": "Geschlossen",
         "storeName": "Abholort",
         "address": "Adresse",
         "openDays": "Öffnungstage",

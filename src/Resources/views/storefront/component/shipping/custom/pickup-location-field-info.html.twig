@@ -134,18 +134,26 @@
                             {% endblock %}
 
                             {% block pickup_location_field_info_schedule_section %}
-                                {% if location.openDays is not empty %}
+                                {% set weekdays = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday', 7: 'sunday' } %}
+                                {# `.elements` gives a real array — the storefront Twig sandbox's `filter` calls array_filter and rejects an EntityCollection. #}
+                                {% set openingHours = location.openingHoursSchedule ? location.openingHoursSchedule.elements : [] %}
+                                {% for dayOfWeek, dayKey in weekdays %}
+                                    {% set intervals = openingHours|filter(interval => interval.dayOfWeek == dayOfWeek) %}
+                                    {% if intervals|length > 0 %}
+                                        <div class="pickup-location-card__row">
+                                            <span class="pickup-location-card__label">{{ ("general.kommandhub-click-and-pick.daysOfWeek." ~ dayKey) | trans }}:</span>
+                                            <span>{% for interval in intervals %}{{ interval.openTime }}–{{ interval.closeTime }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% set specialHours = location.specialHours ? location.specialHours.elements : [] %}
+                                {% for special in specialHours %}
                                     <div class="pickup-location-card__row">
-                                        <span class="pickup-location-card__label">{{ "general.kommandhub-click-and-pick.locationInfoFields.openDays" | trans }}:</span>
-                                        <span>{{ format_calendar_days(location.openDays) }}</span>
+                                        <span class="pickup-location-card__label">{{ special.date|date('Y-m-d') }}:</span>
+                                        <span>{% if special.closed %}{{ "general.kommandhub-click-and-pick.locationInfoFields.closed" | trans }}{% else %}{{ special.openTime }}–{{ special.closeTime }}{% endif %}</span>
                                     </div>
-                                {% endif %}
-                                {% if location.openingHours is not null and location.closingHours is not null %}
-                                    <div class="pickup-location-card__row">
-                                        <span class="pickup-location-card__label">{{ "general.kommandhub-click-and-pick.locationInfoFields.openHours" | trans }}:</span>
-                                        <span>{{ location.openingHours }} - {{ location.closingHours }}</span>
-                                    </div>
-                                {% endif %}
+                                {% endfor %}
                             {% endblock %}
 
                             {% block pickup_location_field_info_contact_section %}

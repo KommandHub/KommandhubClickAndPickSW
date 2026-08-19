@@ -1,5 +1,28 @@
 {
   "kommandhub-pickup-location": {
+    "schedule": {
+      "cardTitle": "Horaires d'ouverture",
+      "labelTimezone": "Fuseau horaire",
+      "helpTimezone": "Fuseau horaire IANA utilisé pour évaluer la disponibilité (ex. Europe/Berlin). Les horaires sont locaux à ce fuseau.",
+      "addInterval": "Ajouter un intervalle",
+      "labelOpen": "Ouvre",
+      "labelClose": "Ferme",
+      "remove": "Supprimer",
+      "specialTitle": "Dates spéciales et jours fériés",
+      "addSpecial": "Ajouter une date spéciale",
+      "labelDate": "Date",
+      "labelClosed": "Fermé",
+      "errorInvalidTime": "Saisissez une heure valide (HH:MM).",
+      "errorOrder": "L'heure de fermeture doit être postérieure à l'ouverture.",
+      "errorOverlap": "Cet intervalle chevauche un autre le même jour.",
+      "weeklyTitle": "Calendrier hebdomadaire",
+      "labelSummary": "Résumé",
+      "closed": "Fermé",
+      "intervalsCount": "intervalle(s)",
+      "specialSummary": "{count} dates spéciales configurées",
+      "summaryEmpty": "Aucun calendrier configuré",
+      "summaryClosed": "Fermé toute la semaine"
+    },
     "general": {
       "title": "Points de retrait",
       "mainMenuItemGeneral": "Points de retrait",
