@@ -1,6 +1,6 @@
 {
   "main.js": {
-    "file": "assets/kommandhub-click-and-pick-s-w-D_M7zGG_.js",
+    "file": "assets/kommandhub-click-and-pick-s-w-eVh5-8At.js",
     "name": "kommandhub-click-and-pick-s-w",
     "src": "main.js",
     "isEntry": true,
@@ -8,7 +8,17 @@
       "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js",
       "module/kommandhub-pickup-location/component/kommandhub-pickup-location-schedule/index.js",
       "module/kommandhub-pickup-location/page/kommandhub-pickup-location-list/index.js",
-      "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js"
+      "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js",
+      "module/kommandhub-order-pickup-info/component/kommandhub-order-pickup-info-tab/index.js"
+    ]
+  },
+  "module/kommandhub-order-pickup-info/component/kommandhub-order-pickup-info-tab/index.js": {
+    "file": "assets/index-BcPBqSlw.js",
+    "name": "index",
+    "src": "module/kommandhub-order-pickup-info/component/kommandhub-order-pickup-info-tab/index.js",
+    "isDynamicEntry": true,
+    "css": [
+      "assets/index-Hs1lYgh2.css"
     ]
   },
   "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js": {
@@ -27,7 +37,7 @@
     ]
   },
   "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js": {
-    "file": "assets/index-C4f2nyP0.js",
+    "file": "assets/index-D9QKKK0E.js",
     "name": "index",
     "src": "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js",
     "isDynamicEntry": true

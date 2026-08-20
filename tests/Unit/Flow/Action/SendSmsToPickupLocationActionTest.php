@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Flow\Action;
 
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Flow\Action\SendSmsToPickupLocationAction;
+use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Sms\SmsGateway;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -138,17 +140,41 @@ class SendSmsToPickupLocationActionTest extends TestCase
         $action->handleFlow($this->flow($this->order(), $this->location('+2348012345678')));
     }
 
-    private function flow(OrderEntity $order, PickupLocationEntity $location): StorableFlow
+    public function testAppendsPickupTimeToMessageWhenRecordPresent(): void
     {
-        return new StorableFlow(
-            'pickup.order.placed',
-            Context::createDefaultContext(),
-            [],
-            [
-                OrderAware::ORDER => $order,
-                PickupLocationAware::PICKUP_LOCATION => $location,
-            ]
-        );
+        $record = new OrderPickupLocationEntity();
+        $record->setId('cccccccccccccccccccccccccccccccc');
+        $record->setPickupTime(new \DateTimeImmutable('2024-06-03 10:30:00'));
+
+        $gateway = $this->createMock(SmsGateway::class);
+        $gateway->method('isConfigured')->willReturn(true);
+        $gateway
+            ->expects(static::once())
+            ->method('send')
+            ->with(
+                '2348012345678',
+                'Pickup order 10001 for Downtown Store. Pickup time: 2024-06-03 10:30.',
+                self::SALES_CHANNEL_ID
+            )
+            ->willReturn('provider-message-id');
+
+        $action = new SendSmsToPickupLocationAction($this->logger, $gateway);
+
+        $action->handleFlow($this->flow($this->order(), $this->location('+2348012345678'), $record));
+    }
+
+    private function flow(OrderEntity $order, PickupLocationEntity $location, ?OrderPickupLocationEntity $record = null): StorableFlow
+    {
+        $data = [
+            OrderAware::ORDER => $order,
+            PickupLocationAware::PICKUP_LOCATION => $location,
+        ];
+
+        if ($record !== null) {
+            $data[OrderPickupLocationAware::ORDER_PICKUP_LOCATION] = $record;
+        }
+
+        return new StorableFlow('pickup.order.placed', Context::createDefaultContext(), [], $data);
     }
 
     private function order(): OrderEntity

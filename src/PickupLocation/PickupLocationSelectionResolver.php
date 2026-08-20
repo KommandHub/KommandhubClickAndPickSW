@@ -4,26 +4,34 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\PickupLocation;
 
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextStorage;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupSelection;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
-use Kommandhub\ClickAndPickSW\Listener\SwitchContextEventListener;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
-use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
 /**
  * Resolves the customer's selected pickup location for the active sales-channel
  * context and validates that it still belongs to the current sales channel.
+ *
+ * The selection is read from {@see PickupContextStorage} (the persisted context
+ * payload) rather than a request-local context extension. That extension is only
+ * attached on context *resolution* and reflects the payload as it was at the
+ * start of the request; during the very request that persists a new selection —
+ * or on a cloned/restored context that never passed the resolver listener — it is
+ * stale or absent. Reading the persisted store makes resolution deterministic on
+ * every cart-calculation pass, so a valid selection can never intermittently
+ * disappear between recalculations.
  */
-final readonly class PickupLocationSelectionResolver
+readonly class PickupLocationSelectionResolver
 {
-    private const LEGACY_EXTENSION_ID = 'id';
-
     public function __construct(
         private EntityRepository $kommandhubPickupLocationRepository,
+        private PickupContextStorage $pickupContextStorage,
     ) {
     }
 
@@ -32,43 +40,60 @@ final readonly class PickupLocationSelectionResolver
         return $context->getShippingMethod()->getId() === KommandhubClickAndPickSW::SHIPPING_METHOD_ID;
     }
 
-    public function extractPickupLocationId(SalesChannelContext $context): ?string
-    {
-        $extension = $context->getExtension(SwitchContextEventListener::PICKUP_LOCATION_EXTENSION);
-
-        if (!$extension instanceof ArrayStruct) {
-            return null;
-        }
-
-        $pickupLocationId = $extension->getVars()[SwitchContextEventListener::PICKUP_LOCATION_ID]
-            ?? $extension->getVars()[self::LEGACY_EXTENSION_ID]
-            ?? null;
-
-        if (!\is_string($pickupLocationId)) {
-            return null;
-        }
-
-        $pickupLocationId = trim($pickupLocationId);
-
-        return $pickupLocationId !== '' ? $pickupLocationId : null;
-    }
-
     public function resolve(SalesChannelContext $context): ?PickupLocationEntity
     {
-        $pickupLocationId = $this->extractPickupLocationId($context);
+        return $this->loadLocation($this->pickupContextStorage->load($context)->pickupLocationId, $context);
+    }
 
+    /**
+     * The full pickup selection (location + chosen local time + instructions) for
+     * the active context, or null when there is no valid pickup location.
+     */
+    public function resolveSelection(SalesChannelContext $context): ?PickupSelection
+    {
+        $stored = $this->pickupContextStorage->load($context);
+        $pickupLocation = $this->loadLocation($stored->pickupLocationId, $context);
+
+        if ($pickupLocation === null) {
+            return null;
+        }
+
+        return new PickupSelection(
+            $pickupLocation,
+            $this->parsePickupTime($stored->pickupTime),
+            $stored->comment,
+        );
+    }
+
+    private function loadLocation(?string $pickupLocationId, SalesChannelContext $context): ?PickupLocationEntity
+    {
         if ($pickupLocationId === null) {
             return null;
         }
 
+        // Load the schedule so pickup-time validation can run against it.
+        $criteria = $this->createPickupLocationCriteria($pickupLocationId, $context->getSalesChannelId());
+        $criteria->addAssociation('openingHoursSchedule');
+        $criteria->addAssociation('specialHours');
+
         $pickupLocation = $this->kommandhubPickupLocationRepository
-            ->search(
-                $this->createPickupLocationCriteria($pickupLocationId, $context->getSalesChannelId()),
-                $context->getContext()
-            )
+            ->search($criteria, $context->getContext())
             ->first();
 
         return $pickupLocation instanceof PickupLocationEntity ? $pickupLocation : null;
+    }
+
+    private function parsePickupTime(?string $value): ?\DateTimeImmutable
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     private function createPickupLocationCriteria(string $pickupLocationId, string $salesChannelId): Criteria

@@ -156,6 +156,23 @@
                                 {% endfor %}
                             {% endblock %}
 
+                            {% block pickup_location_field_info_selected_time_section %}
+                                {% set pickupTime = pickupTime ?? null %}
+                                {% set pickupComment = pickupComment ?? null %}
+                                {% if pickupTime %}
+                                    <div class="pickup-location-card__row">
+                                        <span class="pickup-location-card__label">{{ "general.kommandhub-click-and-pick.locationInfoFields.pickupTime" | trans }}:</span>
+                                        <span>{{ pickupTime|format_datetime('medium', 'short', locale=app.request.locale) }}</span>
+                                    </div>
+                                {% endif %}
+                                {% if pickupComment %}
+                                    <div class="pickup-location-card__row">
+                                        <span class="pickup-location-card__label">{{ "general.kommandhub-click-and-pick.locationInfoFields.pickupComment" | trans }}:</span>
+                                        <span>{{ pickupComment }}</span>
+                                    </div>
+                                {% endif %}
+                            {% endblock %}
+
                             {% block pickup_location_field_info_contact_section %}
                                 {% if config('KommandhubClickAndPickSW.config.showContactDetailInPickupLocationInfo') %}
                                     {% if location.phoneNumber %}

@@ -7,7 +7,6 @@ namespace Kommandhub\ClickAndPickSW;
 use Doctrine\DBAL\Connection;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSalesChannelMapping\PickupLocationSalesChannelMappingDefinition;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationDefinition;
-use Kommandhub\ClickAndPickSW\Installer\CustomFieldsInstaller;
 use Kommandhub\ClickAndPickSW\Installer\PaymentMethodInstaller;
 use Kommandhub\ClickAndPickSW\Installer\ShippingMethodInstaller;
 use Shopware\Core\Checkout\Payment\PaymentMethodCollection;
@@ -33,9 +32,9 @@ class KommandhubClickAndPickSW extends Plugin
     }
 
     /**
-     * Re-run the installers on update so payment/shipping methods and custom
-     * fields are migrated when their classes or ids move between versions. Each
-     * installer is idempotent, so this is a no-op for an unchanged install.
+     * Re-run the installers on update so the payment/shipping methods are
+     * migrated when their classes or ids move between versions. Each installer is
+     * idempotent, so this is a no-op for an unchanged install.
      */
     public function update(UpdateContext $updateContext): void
     {
@@ -50,7 +49,6 @@ class KommandhubClickAndPickSW extends Plugin
 
         $this->getPaymentMethodInstaller()->activate($context);
         $this->getShippingMethodInstaller()->activate($context);
-        $this->getCustomFieldsInstaller()->addRelations($context);
 
         parent::activate($activateContext);
     }
@@ -109,10 +107,6 @@ class KommandhubClickAndPickSW extends Plugin
     {
         $this->getPaymentMethodInstaller()->install(static::class, $context);
         $this->getShippingMethodInstaller()->install($context);
-
-        $customFields = $this->getCustomFieldsInstaller();
-        $customFields->install($context);
-        $customFields->addRelations($context);
     }
 
     private function getPaymentMethodInstaller(): PaymentMethodInstaller
@@ -146,18 +140,5 @@ class KommandhubClickAndPickSW extends Plugin
             $deliveryTimeRepository,
             $ruleRepository
         );
-    }
-
-    private function getCustomFieldsInstaller(): CustomFieldsInstaller
-    {
-        $container = $this->requireContainer();
-
-        /** @var EntityRepository $customFieldSetRepository */
-        $customFieldSetRepository = $container->get('custom_field_set.repository');
-
-        /** @var EntityRepository $customFieldSetRelationRepository */
-        $customFieldSetRelationRepository = $container->get('custom_field_set_relation.repository');
-
-        return new CustomFieldsInstaller($customFieldSetRepository, $customFieldSetRelationRepository);
     }
 }

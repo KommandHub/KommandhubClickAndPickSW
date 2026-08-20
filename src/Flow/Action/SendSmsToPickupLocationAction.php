@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Flow\Action;
 
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
+use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Sms\SmsGateway;
 use Psr\Log\LoggerInterface;
@@ -87,7 +89,7 @@ class SendSmsToPickupLocationAction extends FlowAction implements DelayableActio
                 return;
             }
 
-            $gateway->send($recipient, $this->buildMessage($order, $pickupLocation), $salesChannelId);
+            $gateway->send($recipient, $this->buildMessage($order, $pickupLocation, $this->resolvePickupRecord($flow)), $salesChannelId);
         } catch (\Throwable $e) {
             $this->logger->error('Failed to send pickup SMS notification.', [
                 'exception' => $e,
@@ -108,12 +110,34 @@ class SendSmsToPickupLocationAction extends FlowAction implements DelayableActio
         return \is_string($digits) && $digits !== '' ? $digits : null;
     }
 
-    private function buildMessage(OrderEntity $order, PickupLocationEntity $pickupLocation): string
+    private function resolvePickupRecord(StorableFlow $flow): ?OrderPickupLocationEntity
     {
-        return sprintf(
+        if (!$flow->hasData(OrderPickupLocationAware::ORDER_PICKUP_LOCATION)) {
+            return null;
+        }
+
+        $record = $flow->getData(OrderPickupLocationAware::ORDER_PICKUP_LOCATION);
+
+        return $record instanceof OrderPickupLocationEntity ? $record : null;
+    }
+
+    private function buildMessage(
+        OrderEntity $order,
+        PickupLocationEntity $pickupLocation,
+        ?OrderPickupLocationEntity $pickupRecord
+    ): string {
+        $message = sprintf(
             'Pickup order %s for %s.',
             $order->getOrderNumber() ?? $order->getId(),
             $pickupLocation->getName()
         );
+
+        $pickupTime = $pickupRecord?->getPickupTime();
+
+        if ($pickupTime !== null) {
+            $message .= ' Pickup time: ' . $pickupTime->format('Y-m-d H:i') . '.';
+        }
+
+        return $message;
     }
 }

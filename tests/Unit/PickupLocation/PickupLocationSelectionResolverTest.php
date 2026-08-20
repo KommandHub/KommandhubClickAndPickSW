@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\PickupLocation;
 
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextStorage;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupSelection;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\StoredPickupSelection;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
-use Kommandhub\ClickAndPickSW\Listener\SwitchContextEventListener;
 use Kommandhub\ClickAndPickSW\PickupLocation\PickupLocationSelectionResolver;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
@@ -18,10 +21,11 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
-use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
 #[CoversClass(PickupLocationSelectionResolver::class)]
+#[UsesClass(StoredPickupSelection::class)]
+#[UsesClass(PickupSelection::class)]
 class PickupLocationSelectionResolverTest extends TestCase
 {
     private const SALES_CHANNEL_ID = '11111111111111111111111111111111';
@@ -29,12 +33,18 @@ class PickupLocationSelectionResolverTest extends TestCase
 
     private EntityRepository&MockObject $pickupLocationRepository;
 
+    private PickupContextStorage&MockObject $pickupContextStorage;
+
     private PickupLocationSelectionResolver $resolver;
 
     protected function setUp(): void
     {
         $this->pickupLocationRepository = $this->createMock(EntityRepository::class);
-        $this->resolver = new PickupLocationSelectionResolver($this->pickupLocationRepository);
+        $this->pickupContextStorage = $this->createMock(PickupContextStorage::class);
+        $this->resolver = new PickupLocationSelectionResolver(
+            $this->pickupLocationRepository,
+            $this->pickupContextStorage
+        );
     }
 
     public function testDetectsPickupShippingMethodByConfiguredId(): void
@@ -47,51 +57,12 @@ class PickupLocationSelectionResolverTest extends TestCase
         ));
     }
 
-    public function testExtractsPickupLocationIdFromPrimaryExtensionKey(): void
+    public function testResolvesValidPickupLocationFromStoredSelection(): void
     {
-        $context = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID),
-            new ArrayStruct([SwitchContextEventListener::PICKUP_LOCATION_ID => ' ' . self::LOCATION_ID . ' '])
-        );
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->with($context)
+            ->willReturn(new StoredPickupSelection(self::LOCATION_ID));
 
-        static::assertSame(self::LOCATION_ID, $this->resolver->extractPickupLocationId($context));
-    }
-
-    public function testFallsBackToLegacyExtensionKey(): void
-    {
-        $context = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID),
-            new ArrayStruct(['id' => self::LOCATION_ID])
-        );
-
-        static::assertSame(self::LOCATION_ID, $this->resolver->extractPickupLocationId($context));
-    }
-
-    public function testReturnsNullForMissingOrInvalidExtensionValues(): void
-    {
-        $missingExtensionContext = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID)
-        );
-        $invalidValueContext = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID),
-            new ArrayStruct([SwitchContextEventListener::PICKUP_LOCATION_ID => 123])
-        );
-        $blankValueContext = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID),
-            new ArrayStruct([SwitchContextEventListener::PICKUP_LOCATION_ID => '   '])
-        );
-
-        static::assertNull($this->resolver->extractPickupLocationId($missingExtensionContext));
-        static::assertNull($this->resolver->extractPickupLocationId($invalidValueContext));
-        static::assertNull($this->resolver->extractPickupLocationId($blankValueContext));
-    }
-
-    public function testResolvesValidPickupLocationForCurrentSalesChannel(): void
-    {
-        $context = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID),
-            new ArrayStruct([SwitchContextEventListener::PICKUP_LOCATION_ID => self::LOCATION_ID])
-        );
         $pickupLocation = new PickupLocationEntity();
         $pickupLocation->setId(self::LOCATION_ID);
 
@@ -100,8 +71,7 @@ class PickupLocationSelectionResolverTest extends TestCase
             ->method('search')
             ->with(
                 static::callback(function (Criteria $criteria): bool {
-                    $filters = $criteria->getFilters();
-                    $filter = $filters[0] ?? null;
+                    $filter = $criteria->getFilters()[0] ?? null;
 
                     if (!$filter instanceof MultiFilter || $criteria->getLimit() !== 1) {
                         return false;
@@ -127,30 +97,93 @@ class PickupLocationSelectionResolverTest extends TestCase
         static::assertSame($pickupLocation, $this->resolver->resolve($context));
     }
 
-    public function testResolveReturnsNullWhenNoValidLocationCanBeLoaded(): void
+    public function testResolveReturnsNullWhenNothingStored(): void
     {
-        $missingIdContext = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID)
-        );
-        $invalidEntityContext = $this->salesChannelContext(
-            $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID),
-            new ArrayStruct([SwitchContextEventListener::PICKUP_LOCATION_ID => self::LOCATION_ID])
-        );
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->willReturn(new StoredPickupSelection());
+
+        $this->pickupLocationRepository->expects(static::never())->method('search');
+
+        static::assertNull($this->resolver->resolve($context));
+    }
+
+    public function testResolveReturnsNullWhenStoredLocationNoLongerResolves(): void
+    {
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->willReturn(new StoredPickupSelection(self::LOCATION_ID));
 
         $this->pickupLocationRepository
             ->expects(static::once())
             ->method('search')
-            ->with(static::isInstanceOf(Criteria::class), $invalidEntityContext->getContext())
             ->willReturn($this->firstResult(new \stdClass()));
 
-        static::assertNull($this->resolver->resolve($missingIdContext));
-        static::assertNull($this->resolver->resolve($invalidEntityContext));
+        static::assertNull($this->resolver->resolve($context));
     }
 
-    private function salesChannelContext(
-        ShippingMethodEntity $shippingMethod,
-        ?ArrayStruct $pickupLocationExtension = null
-    ): SalesChannelContext&MockObject {
+    public function testResolveSelectionReturnsLocationTimeAndComment(): void
+    {
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->willReturn(
+            new StoredPickupSelection(self::LOCATION_ID, '2024-06-03T10:00:00+01:00', 'Ring the bell')
+        );
+
+        $pickupLocation = new PickupLocationEntity();
+        $pickupLocation->setId(self::LOCATION_ID);
+        $this->pickupLocationRepository->method('search')->willReturn($this->firstResult($pickupLocation));
+
+        $selection = $this->resolver->resolveSelection($context);
+
+        static::assertNotNull($selection);
+        static::assertSame($pickupLocation, $selection->pickupLocation);
+        static::assertInstanceOf(\DateTimeImmutable::class, $selection->pickupTime);
+        static::assertSame('2024-06-03T10:00:00+01:00', $selection->pickupTime->format('Y-m-d\TH:i:sP'));
+        static::assertSame('Ring the bell', $selection->comment);
+    }
+
+    public function testResolveSelectionWithoutChosenTimeReturnsNullPickupTime(): void
+    {
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->willReturn(new StoredPickupSelection(self::LOCATION_ID));
+
+        $pickupLocation = new PickupLocationEntity();
+        $pickupLocation->setId(self::LOCATION_ID);
+        $this->pickupLocationRepository->method('search')->willReturn($this->firstResult($pickupLocation));
+
+        $selection = $this->resolver->resolveSelection($context);
+
+        static::assertNotNull($selection);
+        static::assertNull($selection->pickupTime);
+        static::assertNull($selection->comment);
+    }
+
+    public function testResolveSelectionIgnoresUnparseablePickupTime(): void
+    {
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->willReturn(
+            new StoredPickupSelection(self::LOCATION_ID, 'not-a-date', null)
+        );
+
+        $pickupLocation = new PickupLocationEntity();
+        $pickupLocation->setId(self::LOCATION_ID);
+        $this->pickupLocationRepository->method('search')->willReturn($this->firstResult($pickupLocation));
+
+        $selection = $this->resolver->resolveSelection($context);
+
+        static::assertNotNull($selection);
+        static::assertNull($selection->pickupTime);
+        static::assertNull($selection->comment);
+    }
+
+    public function testResolveSelectionReturnsNullWhenNoLocation(): void
+    {
+        $context = $this->salesChannelContext($this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID));
+        $this->pickupContextStorage->method('load')->willReturn(new StoredPickupSelection());
+
+        static::assertNull($this->resolver->resolveSelection($context));
+    }
+
+    private function salesChannelContext(ShippingMethodEntity $shippingMethod): SalesChannelContext&MockObject
+    {
         $context = $this->getMockBuilder(SalesChannelContext::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['getContext', 'getShippingMethod', 'getSalesChannelId'])
@@ -158,10 +191,6 @@ class PickupLocationSelectionResolverTest extends TestCase
         $context->method('getContext')->willReturn(Context::createDefaultContext());
         $context->method('getShippingMethod')->willReturn($shippingMethod);
         $context->method('getSalesChannelId')->willReturn(self::SALES_CHANNEL_ID);
-
-        if ($pickupLocationExtension !== null) {
-            $context->addExtension(SwitchContextEventListener::PICKUP_LOCATION_EXTENSION, $pickupLocationExtension);
-        }
 
         return $context;
     }

@@ -46,7 +46,12 @@ class Migration1759696668PickupLocation extends MigrationStep
                 `active` TINYINT(1) NOT NULL DEFAULT 0,
                 `created_at` DATETIME(3) NOT NULL,
                 `updated_at` DATETIME(3) NULL,
-                PRIMARY KEY (`id`)
+                PRIMARY KEY (`id`),
+                -- Supports active-only listings (storefront + admin). InnoDB
+                -- appends the PK, so this is physically (active, id) at the leaf;
+                -- an explicit (active, id) would be redundant.
+                INDEX `idx.{$pickupLocationTable}.active` (`active`),
+                INDEX `idx.{$pickupLocationTable}.location_code` (`location_code`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
 

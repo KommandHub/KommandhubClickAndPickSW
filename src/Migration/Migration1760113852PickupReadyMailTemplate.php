@@ -349,6 +349,9 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
             Order number: {{ order.orderNumber }}<br>
             Customer: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}<br>
             Ordered on: {{ order.orderDateTime|format_datetime('medium', 'short', locale='en-GB') }}<br>
+            {% set pickupTime = pickupOrderLocation.pickupTime %}
+            {% if pickupTime %}Requested pickup time: {{ pickupTime|format_datetime('medium', 'short', locale='en-GB') }}<br>{% endif %}
+            {% if pickupOrderLocation.comment %}Customer note: {{ pickupOrderLocation.comment }}<br>{% endif %}
             <br>
             Please prepare the order for pickup and ensure it is ready when the customer arrives.<br>
             <br>
@@ -527,6 +530,9 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         Order number: {{ order.orderNumber }}
         Customer: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}
         Ordered on: {{ order.orderDateTime|format_datetime('medium', 'short', locale='en-GB') }}
+        {% set pickupTime = pickupOrderLocation.pickupTime %}
+        {% if pickupTime %}Requested pickup time: {{ pickupTime|format_datetime('medium', 'short', locale='en-GB') }}{% endif %}
+        {% if pickupOrderLocation.comment %}Customer note: {{ pickupOrderLocation.comment }}{% endif %}
 
         Please prepare the order for pickup and ensure it is ready when the customer arrives.
 
@@ -644,6 +650,9 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
             Bestellnummer: {{ order.orderNumber }}<br>
             Kunde: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}<br>
             Bestelldatum: {{ order.orderDateTime|format_datetime('medium', 'short', locale='de-DE') }}<br>
+            {% set pickupTime = pickupOrderLocation.pickupTime %}
+            {% if pickupTime %}Gewünschte Abholzeit: {{ pickupTime|format_datetime('medium', 'short', locale='de-DE') }}<br>{% endif %}
+            {% if pickupOrderLocation.comment %}Kundenhinweis: {{ pickupOrderLocation.comment }}<br>{% endif %}
             <br>
             Bitte bereiten Sie die Bestellung zur Abholung durch den Kunden vor.<br>
 
@@ -821,6 +830,9 @@ class Migration1760113852PickupReadyMailTemplate extends MigrationStep
         Bestellnummer: {{ order.orderNumber }}
         Kunde: {{ order.orderCustomer.firstName }} {{ order.orderCustomer.lastName }}
         Bestelldatum: {{ order.orderDateTime|format_datetime('medium', 'short', locale='de-DE') }}
+        {% set pickupTime = pickupOrderLocation.pickupTime %}
+        {% if pickupTime %}Gewünschte Abholzeit: {{ pickupTime|format_datetime('medium', 'short', locale='de-DE') }}{% endif %}
+        {% if pickupOrderLocation.comment %}Kundenhinweis: {{ pickupOrderLocation.comment }}{% endif %}
 
         Bitte bereiten Sie die Bestellung zur Abholung vor und stellen Sie sicher, dass sie zum Zeitpunkt der Abholung bereit ist.
 

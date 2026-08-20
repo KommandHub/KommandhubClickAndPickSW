@@ -4,257 +4,119 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Listener;
 
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
-use Shopware\Core\Framework\DataAbstractionLayer\Validation\EntityExists;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextKeys;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextStorage;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\StoredPickupSelection;
+use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
+use Kommandhub\ClickAndPickSW\PickupLocation\PickupLocationValidator;
 use Shopware\Core\Framework\Routing\Event\SalesChannelContextResolvedEvent;
 use Shopware\Core\Framework\Struct\ArrayStruct;
-use Shopware\Core\Framework\Uuid\Uuid;
-use Shopware\Core\Framework\Validation\DataValidationDefinition;
-use Shopware\Core\Framework\Validation\DataValidator;
-use Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister;
 use Shopware\Core\System\SalesChannel\Event\SwitchContextEvent;
-use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 
 /**
- * Listens to context switch and context-resolved events in the Shopware Storefront.
- * Handles validation and persistence of the pickup location context for the sales channel.
+ * Keeps the customer's pickup selection in sync with the sales-channel context.
+ *
+ * On a context switch that carries the pickup field, it validates and persists
+ * the selection; on context resolution it re-attaches the selection as a context
+ * extension the storefront reads. All persistence and validation is delegated —
+ * this listener only wires the two context events to those services.
+ *
+ * The stored payload lives with Shopware's own shipping/payment selection and
+ * inherits its lifecycle (see {@see PickupContextStorage}); the selection is
+ * cleared when its cart becomes an order (see {@see OrderListener}).
  */
 readonly class SwitchContextEventListener
 {
     /**
-     * Key for the pickup location ID in the context payload.
+     * Back-compat aliases for the pickup context keys, now owned by
+     * {@see PickupContextKeys}. Kept because other services and tests reference
+     * them.
      */
-    final public const PICKUP_LOCATION_ID = 'pickupLocationId';
+    final public const PICKUP_LOCATION_ID = PickupContextKeys::LOCATION_ID;
+    final public const PICKUP_LOCATION_EXTENSION = PickupContextKeys::EXTENSION;
+    final public const PICKUP_TIME = PickupContextKeys::TIME;
+    final public const PICKUP_COMMENT = PickupContextKeys::COMMENT;
 
-    /**
-     * Key for the pickup location extension in the sales channel context.
-     */
-    final public const PICKUP_LOCATION_EXTENSION = 'pickupLocation';
-
-    /**
-     * @param DataValidator $validator Validator for data validation.
-     * @param SalesChannelContextPersister $contextPersister Persists sales channel context data.
-     * @param Connection $connection Database connection.
-     */
     public function __construct(
-        private DataValidator $validator,
-        private SalesChannelContextPersister $contextPersister,
-        private Connection $connection,
+        private PickupContextStorage $pickupContextStorage,
+        private PickupLocationValidator $pickupLocationValidator,
     ) {
     }
 
     /**
-     * Handles the SwitchContextEvent to validate and update the pickup location in the context.
-     *
-     * @throws \JsonException
-     * @throws Exception
+     * Validate + persist the pickup selection on a context switch that carries
+     * the pickup field. Switches that do not carry it (payment method, address,
+     * language, …) are ignored so they never disturb the stored selection.
      */
     #[AsEventListener(event: SwitchContextEvent::CONSISTENT_CHECK)]
     public function onSwitchContext(SwitchContextEvent $event): void
     {
         $context = $event->getSalesChannelContext();
-        $pickupLocationId = $this->normalizePickupLocationId(
-            $event->getRequestData()->get(self::PICKUP_LOCATION_ID)
-        );
+        $requestData = $event->getRequestData();
 
-        // If no pickup location is provided, do nothing.
+        if (!$requestData->has(PickupContextKeys::LOCATION_ID)) {
+            return;
+        }
+
+        $pickupLocationId = $this->normalize($requestData->get(PickupContextKeys::LOCATION_ID));
+
+        // Field present but empty — the customer explicitly removed the pickup
+        // location (the remove control), so clear the whole selection.
         if ($pickupLocationId === null) {
-            $this->updateContextPayload($context, null);
+            $this->pickupContextStorage->clear($context);
 
             return;
         }
 
-        // Validate and update the pickup location in the context payload.
-        $this->validatePickupLocation($pickupLocationId, $context);
-        $this->updateContextPayload($context, $pickupLocationId);
+        // Reject a stale/foreign/inactive location before it is persisted. The
+        // pickup time is validated later at the checkout gate, which has the
+        // location's schedule loaded.
+        $this->pickupLocationValidator->validate($pickupLocationId, $context);
+
+        $this->pickupContextStorage->save($context, new StoredPickupSelection(
+            $pickupLocationId,
+            $this->normalize($requestData->get(PickupContextKeys::TIME)),
+            $this->normalize($requestData->get(PickupContextKeys::COMMENT)),
+        ));
     }
 
     /**
-     * Handles the SalesChannelContextResolvedEvent to add the pickup location extension to the context.
-     *
-     * @param SalesChannelContextResolvedEvent $event
-     *
-     * @throws \JsonException
-     * @throws Exception
+     * Re-attach the stored pickup selection as a context extension. Only touches
+     * the store for the Click & Pick shipping method, so every other request
+     * avoids the lookup entirely.
      */
     #[AsEventListener(event: SalesChannelContextResolvedEvent::class)]
     public function onSalesChannelContextResolved(SalesChannelContextResolvedEvent $event): void
     {
         $context = $event->getSalesChannelContext();
-        $existingPayload = $this->fetchContextPayload($context);
 
-        // If no payload exists, do nothing.
-        if (!$existingPayload) {
+        if ($context->getShippingMethod()->getId() !== KommandhubClickAndPickSW::SHIPPING_METHOD_ID) {
             return;
         }
 
-        $pickupLocationId = $this->normalizePickupLocationId(
-            $existingPayload[self::PICKUP_LOCATION_ID] ?? null
-        );
+        $stored = $this->pickupContextStorage->load($context);
 
-        // If no pickup location is set, do nothing.
-        if ($pickupLocationId === null) {
+        if ($stored->isEmpty()) {
             return;
         }
 
-        // Add the pickup location as an extension to the context.
-        $context->addExtension(self::PICKUP_LOCATION_EXTENSION, new ArrayStruct([
-            'id' => $pickupLocationId,
-            self::PICKUP_LOCATION_ID => $pickupLocationId,
+        $context->addExtension(PickupContextKeys::EXTENSION, new ArrayStruct([
+            PickupContextKeys::LEGACY_ID => $stored->pickupLocationId,
+            PickupContextKeys::LOCATION_ID => $stored->pickupLocationId,
+            PickupContextKeys::TIME => $stored->pickupTime,
+            PickupContextKeys::COMMENT => $stored->comment,
         ]));
     }
 
-    /**
-     * Validates the provided pickup location ID for the current sales channel context.
-     *
-     * @param string $pickupLocationId
-     * @param SalesChannelContext $context
-     */
-    private function validatePickupLocation(string $pickupLocationId, SalesChannelContext $context): void
+    private function normalize(mixed $value): ?string
     {
-        $criteria = $this->createPickupLocationCriteria($pickupLocationId, $context->getSalesChannelId());
-        $definition = $this->createValidationDefinition($criteria, $context);
-
-        $this->validator->validate([self::PICKUP_LOCATION_ID => $pickupLocationId], $definition);
-    }
-
-    /**
-     * Creates a criteria object to search for a valid pickup location.
-     *
-     * @param string $pickupLocationId
-     * @param string $salesChannelId
-     *
-     * @return Criteria
-     */
-    private function createPickupLocationCriteria(string $pickupLocationId, string $salesChannelId): Criteria
-    {
-        $criteria = new Criteria();
-        $criteria->addFilter(new MultiFilter(MultiFilter::CONNECTION_AND, [
-            new EqualsFilter('id', $pickupLocationId),
-            new EqualsFilter('active', true),
-            new EqualsFilter('salesChannels.id', $salesChannelId),
-        ]));
-        $criteria->setLimit(1);
-
-        return $criteria;
-    }
-
-    /**
-     * Creates a validation definition for the pickup location entity.
-     *
-     * @param Criteria $criteria
-     * @param SalesChannelContext $context
-     *
-     * @return DataValidationDefinition
-     */
-    private function createValidationDefinition(Criteria $criteria, SalesChannelContext $context): DataValidationDefinition
-    {
-        $definition = new DataValidationDefinition('kommandhub_click_and_pick.context_switch');
-        $definition->add(
-            self::PICKUP_LOCATION_ID,
-            new EntityExists([
-                'entity' => 'kommandhub_pickup_location',
-                'context' => $context->getContext(),
-                'criteria' => $criteria,
-            ])
-        );
-
-        return $definition;
-    }
-
-    /**
-     * Updates the context payload with the new pickup location ID.
-     * Does nothing if the context is expired or payload is missing.
-     *
-     * @param SalesChannelContext $context
-     * @param string|null $pickupLocationId
-     *
-     * @throws \JsonException
-     * @throws Exception
-     */
-    private function updateContextPayload(SalesChannelContext $context, ?string $pickupLocationId): void
-    {
-        $existingPayload = $this->fetchContextPayload($context);
-
-        if (!$existingPayload) {
-            return;
-        }
-
-        // Don't update if context is marked as expired
-        if (($existingPayload['expired'] ?? null) === true) {
-            return;
-        }
-
-        $existingPayload[self::PICKUP_LOCATION_ID] = $pickupLocationId;
-
-        $this->saveContextPayload($context, $existingPayload);
-    }
-
-    /**
-     * Fetches the context payload from the database for the given context.
-     *
-     * @param SalesChannelContext $context
-     *
-     * @return array|null
-     *
-     * @throws \JsonException
-     * @throws Exception
-     */
-    private function fetchContextPayload(SalesChannelContext $context): ?array
-    {
-        $query = $this->connection->createQueryBuilder();
-        $query->select('payload')
-            ->from('sales_channel_api_context')
-            ->where('token = :token')
-            ->andWhere('sales_channel_id = :salesChannelId')
-            ->setParameter('token', $context->getToken())
-            ->setParameter('salesChannelId', Uuid::fromHexToBytes($context->getSalesChannelId()));
-
-        $payload = $query->executeQuery()->fetchOne();
-
-        if (!\is_string($payload) || $payload === '') {
+        if (!\is_string($value)) {
             return null;
         }
 
-        $decoded = json_decode($payload, true, 512, \JSON_THROW_ON_ERROR);
+        $value = trim($value);
 
-        return \is_array($decoded) ? $decoded : null;
-    }
-
-    /**
-     * Saves the updated context payload to the database.
-     *
-     * @param SalesChannelContext $context
-     * @param array $payload
-     *
-     * @throws \JsonException
-     */
-    private function saveContextPayload(SalesChannelContext $context, array $payload): void
-    {
-        $customer = $context->getCustomer();
-        $customerId = $customer && empty($context->getPermissions()) ? $customer->getId() : null;
-
-        $this->contextPersister->save(
-            $context->getToken(),
-            $payload,
-            $context->getSalesChannelId(),
-            $customerId
-        );
-    }
-
-    private function normalizePickupLocationId(mixed $pickupLocationId): ?string
-    {
-        if (!\is_string($pickupLocationId)) {
-            return null;
-        }
-
-        $pickupLocationId = trim($pickupLocationId);
-
-        return $pickupLocationId !== '' ? $pickupLocationId : null;
+        return $value !== '' ? $value : null;
     }
 }

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Event;
 
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationDefinition;
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationDefinition;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
+use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Order\OrderDefinition;
@@ -30,7 +33,7 @@ use Symfony\Contracts\EventDispatcher\Event;
  * pickup-specific flows (mails, status changes, notifications) can be built on
  * top of it. Normal delivery orders never dispatch this event.
  */
-class PickupOrderPlacedEvent extends Event implements SalesChannelAware, SalesChannelContextAware, OrderAware, MailAware, CustomerAware, CustomerGroupAware, FlowEventAware, PickupLocationAware
+class PickupOrderPlacedEvent extends Event implements SalesChannelAware, SalesChannelContextAware, OrderAware, MailAware, CustomerAware, CustomerGroupAware, FlowEventAware, PickupLocationAware, OrderPickupLocationAware
 {
     public const EVENT_NAME = 'pickup.order.placed';
 
@@ -38,6 +41,7 @@ class PickupOrderPlacedEvent extends Event implements SalesChannelAware, SalesCh
         private readonly SalesChannelContext $context,
         private readonly OrderEntity $order,
         private readonly PickupLocationEntity $pickupLocation,
+        private readonly OrderPickupLocationEntity $pickupOrderLocation,
         private ?MailRecipientStruct $mailRecipientStruct = null
     ) {
     }
@@ -46,7 +50,8 @@ class PickupOrderPlacedEvent extends Event implements SalesChannelAware, SalesCh
     {
         return (new EventDataCollection())
             ->add(OrderAware::ORDER, new EntityType(OrderDefinition::class))
-            ->add(PickupLocationAware::PICKUP_LOCATION, new EntityType(PickupLocationDefinition::class));
+            ->add(PickupLocationAware::PICKUP_LOCATION, new EntityType(PickupLocationDefinition::class))
+            ->add(OrderPickupLocationAware::ORDER_PICKUP_LOCATION, new EntityType(OrderPickupLocationDefinition::class));
     }
 
     public function getName(): string
@@ -77,6 +82,16 @@ class PickupOrderPlacedEvent extends Event implements SalesChannelAware, SalesCh
     public function getPickupLocation(): PickupLocationEntity
     {
         return $this->pickupLocation;
+    }
+
+    public function getOrderPickupLocationId(): string
+    {
+        return $this->pickupOrderLocation->getId();
+    }
+
+    public function getOrderPickupLocation(): OrderPickupLocationEntity
+    {
+        return $this->pickupOrderLocation;
     }
 
     public function getCustomerId(): string

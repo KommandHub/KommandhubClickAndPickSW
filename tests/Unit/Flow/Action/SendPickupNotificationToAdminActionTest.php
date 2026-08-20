@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Flow\Action;
 
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Flow\Action\SendPickupNotificationToAdminAction;
+use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use Kommandhub\ClickAndPickSW\Migration\Migration1760113852PickupReadyMailTemplate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -288,20 +290,48 @@ class SendPickupNotificationToAdminActionTest extends TestCase
         $this->action->handleFlow($this->flow($this->order(), $this->location('pickup@shop.test')));
     }
 
+    public function testPassesOrderPickupRecordIntoTemplateData(): void
+    {
+        $record = new OrderPickupLocationEntity();
+        $record->setId('cccccccccccccccccccccccccccccccc');
+        $record->setComment('Ring the bell');
+
+        $this->systemConfigService->method('get')->willReturn('admin@shop.test');
+        $this->mailTemplateRepository->method('search')->willReturn($this->templateResult($this->template()));
+
+        $this->mailService
+            ->expects(static::once())
+            ->method('send')
+            ->with(
+                static::isType('array'),
+                static::anything(),
+                static::callback(
+                    static fn (array $templateData): bool => ($templateData['pickupOrderLocation'] ?? null) === $record
+                )
+            );
+
+        $this->action->handleFlow($this->flow($this->order(), $this->location('pickup@shop.test'), [], $record));
+    }
+
     /**
      * @param array<string, mixed> $config
      */
-    private function flow(OrderEntity $order, PickupLocationEntity $location, array $config = []): StorableFlow
-    {
-        $flow = new StorableFlow(
-            'pickup.order.placed',
-            Context::createDefaultContext(),
-            [],
-            [
-                OrderAware::ORDER => $order,
-                PickupLocationAware::PICKUP_LOCATION => $location,
-            ]
-        );
+    private function flow(
+        OrderEntity $order,
+        PickupLocationEntity $location,
+        array $config = [],
+        ?OrderPickupLocationEntity $record = null
+    ): StorableFlow {
+        $data = [
+            OrderAware::ORDER => $order,
+            PickupLocationAware::PICKUP_LOCATION => $location,
+        ];
+
+        if ($record !== null) {
+            $data[OrderPickupLocationAware::ORDER_PICKUP_LOCATION] = $record;
+        }
+
+        $flow = new StorableFlow('pickup.order.placed', Context::createDefaultContext(), [], $data);
         $flow->setConfig($config);
 
         return $flow;

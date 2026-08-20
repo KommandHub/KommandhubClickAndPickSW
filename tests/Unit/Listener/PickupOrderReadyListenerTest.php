@@ -5,20 +5,19 @@ declare(strict_types=1);
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Listener;
 
 use Kommandhub\ClickAndPickSW\Entity\Order\Aggregated\OrderDelivery\OrderDeliveryStates;
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Event\PickupOrderReadyEvent;
-use Kommandhub\ClickAndPickSW\Installer\CustomFieldsInstaller;
 use Kommandhub\ClickAndPickSW\Listener\PickupOrderReadyListener;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryCollection;
 use Shopware\Core\Checkout\Order\Aggregate\OrderDelivery\OrderDeliveryEntity;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\System\StateMachine\Aggregation\StateMachineState\StateMachineStateEntity;
 use Shopware\Core\System\StateMachine\Event\StateMachineStateChangeEvent;
@@ -34,182 +33,114 @@ class PickupOrderReadyListenerTest extends TestCase
     private const DELIVERY_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
     private EntityRepository&MockObject $orderDeliveryRepository;
-
-    private EntityRepository&MockObject $pickupLocationRepository;
-
     private EventDispatcherInterface&MockObject $eventDispatcher;
-
     private PickupOrderReadyListener $listener;
 
     protected function setUp(): void
     {
         $this->orderDeliveryRepository = $this->createMock(EntityRepository::class);
-        $this->pickupLocationRepository = $this->createMock(EntityRepository::class);
         $this->eventDispatcher = $this->createMock(EventDispatcherInterface::class);
 
-        $this->listener = new PickupOrderReadyListener(
-            $this->orderDeliveryRepository,
-            $this->pickupLocationRepository,
-            $this->eventDispatcher,
-        );
+        $this->listener = new PickupOrderReadyListener($this->orderDeliveryRepository, $this->eventDispatcher);
     }
 
     public function testDispatchesForPickupOrderEnteringReady(): void
     {
-        $order = $this->order([CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::LOCATION_ID]);
-        $pickupLocation = new PickupLocationEntity();
-        $pickupLocation->setId(self::LOCATION_ID);
-        $event = $this->stateChangeEvent(
-            StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
-            OrderDeliveryStates::STATE_READY_FOR_PICKUP
-        );
+        $location = new PickupLocationEntity();
+        $location->setId(self::LOCATION_ID);
+        $order = $this->orderWithPickup($location);
 
-        $this->orderDeliveryRepository
-            ->expects(static::once())
-            ->method('search')
-            ->with(
-                static::callback(function (Criteria $criteria): bool {
-                    return $criteria->getIds() === [self::DELIVERY_ID]
-                        && $criteria->getAssociation('order.orderCustomer') !== null;
-                }),
-                $event->getContext()
-            )
-            ->willReturn($this->deliveryResult($order));
-
-        $this->pickupLocationRepository
-            ->expects(static::once())
-            ->method('search')
-            ->with(
-                static::callback(static fn (Criteria $criteria): bool => $criteria->getIds() === [self::LOCATION_ID]),
-                $event->getContext()
-            )
-            ->willReturn($this->firstResult($pickupLocation));
+        $this->orderDeliveryRepository->method('search')->willReturn($this->deliveryResult($order));
 
         $this->eventDispatcher
             ->expects(static::once())
             ->method('dispatch')
             ->with(
                 static::callback(
-                    static fn (object $dispatched): bool => $dispatched instanceof PickupOrderReadyEvent
-                        && $dispatched->getOrder() === $order
-                        && $dispatched->getPickupLocation() === $pickupLocation
-                        && $dispatched->getContext() === $event->getContext()
+                    static fn (object $event): bool => $event instanceof PickupOrderReadyEvent
+                        && $event->getPickupLocation() === $location
+                        && $event->getOrder() === $order
                 ),
                 PickupOrderReadyEvent::EVENT_NAME
             )
             ->willReturnArgument(0);
 
-        $this->listener->onOrderDeliveryStateChanged($event);
+        $this->listener->onOrderDeliveryStateChanged($this->readyEnterEvent());
     }
 
     public function testDoesNotDispatchForNonPickupOrder(): void
     {
-        $this->orderDeliveryRepository->method('search')->willReturn($this->deliveryResult($this->order([])));
-        $this->pickupLocationRepository->expects(static::never())->method('search');
+        // Order without the pickup extension → not a pickup order.
+        $order = new OrderEntity();
+        $order->setId(self::ORDER_ID);
+
+        $this->orderDeliveryRepository->method('search')->willReturn($this->deliveryResult($order));
         $this->eventDispatcher->expects(static::never())->method('dispatch');
 
-        $this->listener->onOrderDeliveryStateChanged(
-            $this->stateChangeEvent(
-                StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
-                OrderDeliveryStates::STATE_READY_FOR_PICKUP
-            )
-        );
+        $this->listener->onOrderDeliveryStateChanged($this->readyEnterEvent());
     }
 
-    public function testDoesNotDispatchWhenPickupLocationCustomFieldIsEmptyString(): void
+    public function testDoesNotDispatchWhenPickupLocationWasDeleted(): void
     {
-        $this->orderDeliveryRepository
-            ->method('search')
-            ->willReturn($this->deliveryResult($this->order([
-                CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => '',
-            ])));
+        // Pickup record exists but its location was removed (FK set null).
+        $order = $this->orderWithPickup(null);
 
-        $this->pickupLocationRepository->expects(static::never())->method('search');
+        $this->orderDeliveryRepository->method('search')->willReturn($this->deliveryResult($order));
         $this->eventDispatcher->expects(static::never())->method('dispatch');
 
-        $this->listener->onOrderDeliveryStateChanged(
-            $this->stateChangeEvent(
-                StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
-                OrderDeliveryStates::STATE_READY_FOR_PICKUP
-            )
-        );
+        $this->listener->onOrderDeliveryStateChanged($this->readyEnterEvent());
     }
 
-    public function testDoesNotDispatchWhenOrderDeliveryCannotBeResolved(): void
+    public function testDoesNotDispatchWhenDeliveryCannotBeResolved(): void
     {
-        $this->orderDeliveryRepository
-            ->method('search')
-            ->willReturn($this->emptyDeliveryResult());
-        $this->pickupLocationRepository->expects(static::never())->method('search');
+        $this->orderDeliveryRepository->method('search')->willReturn($this->deliveryResult(null));
         $this->eventDispatcher->expects(static::never())->method('dispatch');
 
-        $this->listener->onOrderDeliveryStateChanged(
-            $this->stateChangeEvent(
-                StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
-                OrderDeliveryStates::STATE_READY_FOR_PICKUP
-            )
-        );
+        $this->listener->onOrderDeliveryStateChanged($this->readyEnterEvent());
     }
 
-    public function testDoesNotDispatchWhenPickupLocationCannotBeResolved(): void
-    {
-        $this->orderDeliveryRepository
-            ->method('search')
-            ->willReturn($this->deliveryResult($this->order([
-                CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::LOCATION_ID,
-            ])));
-        $this->pickupLocationRepository
-            ->method('search')
-            ->willReturn($this->firstResult(null));
-        $this->eventDispatcher->expects(static::never())->method('dispatch');
-
-        $this->listener->onOrderDeliveryStateChanged(
-            $this->stateChangeEvent(
-                StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
-                OrderDeliveryStates::STATE_READY_FOR_PICKUP
-            )
-        );
-    }
-
-    public function testDoesNotDispatchForUnrelatedStateTransition(): void
+    public function testDoesNotDispatchOnLeaveSide(): void
     {
         $this->orderDeliveryRepository->expects(static::never())->method('search');
-        $this->pickupLocationRepository->expects(static::never())->method('search');
         $this->eventDispatcher->expects(static::never())->method('dispatch');
 
-        $this->listener->onOrderDeliveryStateChanged(
-            $this->stateChangeEvent(
-                StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
-                'shipped'
-            )
-        );
+        $this->listener->onOrderDeliveryStateChanged($this->stateChangeEvent(
+            StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_LEAVE,
+            OrderDeliveryStates::STATE_READY_FOR_PICKUP
+        ));
     }
 
-    public function testDoesNotDispatchOnLeaveSideOfReady(): void
+    public function testDoesNotDispatchForUnrelatedState(): void
     {
         $this->orderDeliveryRepository->expects(static::never())->method('search');
-        $this->pickupLocationRepository->expects(static::never())->method('search');
         $this->eventDispatcher->expects(static::never())->method('dispatch');
 
-        $this->listener->onOrderDeliveryStateChanged(
-            $this->stateChangeEvent(
-                StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_LEAVE,
-                OrderDeliveryStates::STATE_READY_FOR_PICKUP
-            )
-        );
+        $this->listener->onOrderDeliveryStateChanged($this->stateChangeEvent(
+            StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
+            'shipped'
+        ));
     }
 
-    /**
-     * @param array<string, mixed> $customFields
-     */
-    private function order(array $customFields): OrderEntity
+    private function orderWithPickup(?PickupLocationEntity $location): OrderEntity
     {
         $order = new OrderEntity();
         $order->setId(self::ORDER_ID);
-        $order->setSalesChannelId('11111111111111111111111111111111');
-        $order->setCustomFields($customFields);
+
+        $pickup = new OrderPickupLocationEntity();
+        $pickup->setId('11111111111111111111111111111111');
+        $pickup->setOrderId(self::ORDER_ID);
+        $pickup->setPickupLocation($location);
+        $order->addExtension('kommandhubPickupLocation', $pickup);
 
         return $order;
+    }
+
+    private function readyEnterEvent(): StateMachineStateChangeEvent&MockObject
+    {
+        return $this->stateChangeEvent(
+            StateMachineStateChangeEvent::STATE_MACHINE_TRANSITION_SIDE_ENTER,
+            OrderDeliveryStates::STATE_READY_FOR_PICKUP
+        );
     }
 
     private function stateChangeEvent(string $side, string $stateTechnicalName): StateMachineStateChangeEvent&MockObject
@@ -229,36 +160,20 @@ class PickupOrderReadyListenerTest extends TestCase
         return $event;
     }
 
-    private function deliveryResult(OrderEntity $order): EntitySearchResult&MockObject
+    private function deliveryResult(?OrderEntity $order): EntitySearchResult&MockObject
     {
-        $delivery = new OrderDeliveryEntity();
-        $delivery->setId(self::DELIVERY_ID);
-        $delivery->setOrder($order);
+        $delivery = null;
 
-        $collection = $this->createMock(EntityCollection::class);
-        $collection->method('first')->willReturn($delivery);
+        if ($order !== null) {
+            $delivery = new OrderDeliveryEntity();
+            $delivery->setId(self::DELIVERY_ID);
+            $delivery->setOrder($order);
+        }
+
+        $collection = new OrderDeliveryCollection($delivery !== null ? [$delivery] : []);
 
         $result = $this->createMock(EntitySearchResult::class);
         $result->method('getEntities')->willReturn($collection);
-
-        return $result;
-    }
-
-    private function emptyDeliveryResult(): EntitySearchResult&MockObject
-    {
-        $collection = $this->createMock(EntityCollection::class);
-        $collection->method('first')->willReturn(null);
-
-        $result = $this->createMock(EntitySearchResult::class);
-        $result->method('getEntities')->willReturn($collection);
-
-        return $result;
-    }
-
-    private function firstResult(?object $first): EntitySearchResult&MockObject
-    {
-        $result = $this->createMock(EntitySearchResult::class);
-        $result->method('first')->willReturn($first);
 
         return $result;
     }

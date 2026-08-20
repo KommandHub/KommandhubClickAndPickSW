@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Storefront\Controller;
 
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\PickupLocation\Availability\PickupLocationAvailabilityService;
+use Kommandhub\ClickAndPickSW\PickupLocation\Availability\PickupTimeSlotService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use Symfony\Component\HttpFoundation\Request;
 use Shopware\Storefront\Controller\StorefrontController;
 use Shopware\Storefront\Framework\Routing\StorefrontRouteScope;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,6 +24,7 @@ class SalesChannelPickupLocationController extends StorefrontController
     public function __construct(
         private readonly EntityRepository $kommandhubPickupLocationRepository,
         private readonly PickupLocationAvailabilityService $availabilityService,
+        private readonly PickupTimeSlotService $slotService,
     ) {
     }
 
@@ -34,11 +38,16 @@ class SalesChannelPickupLocationController extends StorefrontController
     {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('active', true));
+        // The sales-channel assignment is a filter only — the DAL joins the
+        // mapping table for it without hydrating the SalesChannel entities, which
+        // this endpoint never renders. Adding the `salesChannels` association here
+        // would fire an extra batched query and hydrate a SalesChannelCollection
+        // per location for nothing.
         $criteria->addFilter(new EqualsFilter('salesChannels.id', $salesChannelId));
-        // Relational schedule loaded once; availability is evaluated in PHP so
-        // each location's own timezone drives the decision (a single SQL weekday
-        // filter cannot, since the local weekday differs per timezone).
-        $criteria->addAssociation('salesChannels');
+        // Relational schedule loaded once (batched IN() per association, not per
+        // location); availability is evaluated in PHP so each location's own
+        // timezone drives the decision (a single SQL weekday filter cannot, since
+        // the local weekday differs per timezone).
         $criteria->addAssociation('openingHoursSchedule');
         $criteria->addAssociation('specialHours');
 
@@ -82,5 +91,66 @@ class SalesChannelPickupLocationController extends StorefrontController
             '@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-location-field-info.html.twig',
             ['location' => $location]
         );
+    }
+
+    #[Route(
+        path: '/kommandhub/sales-channel/{salesChannelId}/location/{locationId}/slots',
+        name: 'frontend.kommandhub.sales-channel.pickup-locations.slots',
+        defaults: ['XmlHttpRequest' => 'true'],
+        methods: ['GET']
+    )]
+    public function slots(
+        string $locationId,
+        string $salesChannelId,
+        Request $request,
+        SalesChannelContext $salesChannelContext
+    ): Response {
+        $criteria = new Criteria([$locationId]);
+        $criteria->addFilter(new EqualsFilter('active', true));
+        $criteria->addFilter(new EqualsFilter('salesChannels.id', $salesChannelId));
+        $criteria->addAssociation('openingHoursSchedule');
+        $criteria->addAssociation('specialHours');
+        $criteria->setLimit(1);
+
+        $location = $this->kommandhubPickupLocationRepository->search(
+            $criteria,
+            $salesChannelContext->getContext()
+        )->first();
+
+        // Build the requested day at midnight in the location's own timezone so
+        // it maps to the intended calendar day for any offset. An unknown
+        // location or unparseable date yields no slots (empty list rendered).
+        $slots = [];
+        $dateString = $request->query->get('date');
+
+        if ($location instanceof PickupLocationEntity && \is_string($dateString)
+            && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateString)
+        ) {
+            $date = $this->buildLocalDate($dateString, $location->getTimezone());
+
+            if ($date !== null) {
+                $slots = $this->slotService->getSlots($location, $date);
+            }
+        }
+
+        return $this->renderStorefront(
+            '@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-time-select-option.html.twig',
+            ['slots' => $slots]
+        );
+    }
+
+    private function buildLocalDate(string $date, ?string $timezone): ?\DateTimeImmutable
+    {
+        try {
+            $zone = new \DateTimeZone($timezone ?? 'UTC');
+        } catch (\Exception) {
+            $zone = new \DateTimeZone('UTC');
+        }
+
+        try {
+            return new \DateTimeImmutable($date . ' 00:00:00', $zone);
+        } catch (\Exception) {
+            return null;
+        }
     }
 }

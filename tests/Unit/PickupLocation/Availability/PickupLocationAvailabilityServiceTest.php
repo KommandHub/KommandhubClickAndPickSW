@@ -208,6 +208,66 @@ class PickupLocationAvailabilityServiceTest extends TestCase
         static::assertSame('Europe/Berlin', $validTimezone->getName());
     }
 
+    public function testGetOpenIntervalsForDateReturnsWeeklyRanges(): void
+    {
+        $location = $this->location('UTC', $this->openingHours([[1, '09:00', '17:00']]), null);
+
+        $intervals = $this->service->getOpenIntervalsForDate($location, $this->at('2024-06-03 00:00:00'));
+
+        static::assertCount(1, $intervals);
+        static::assertSame('2024-06-03 09:00', $intervals[0]['start']->format('Y-m-d H:i'));
+        static::assertSame('2024-06-03 17:00', $intervals[0]['end']->format('Y-m-d H:i'));
+    }
+
+    public function testGetOpenIntervalsForDateWrapsOvernightIntervalToNextDay(): void
+    {
+        $location = $this->location('UTC', $this->openingHours([[1, '22:00', '02:00']]), null);
+
+        $intervals = $this->service->getOpenIntervalsForDate($location, $this->at('2024-06-03 00:00:00'));
+
+        static::assertCount(1, $intervals);
+        static::assertSame('2024-06-03 22:00', $intervals[0]['start']->format('Y-m-d H:i'));
+        static::assertSame('2024-06-04 02:00', $intervals[0]['end']->format('Y-m-d H:i'));
+    }
+
+    public function testGetOpenIntervalsForDateReturnsEmptyOnSpecialClosure(): void
+    {
+        $location = $this->location(
+            'UTC',
+            $this->openingHours([[2, '09:00', '17:00']]),
+            $this->specialHours([['2024-12-24', true, null, null]])
+        );
+
+        static::assertSame([], $this->service->getOpenIntervalsForDate($location, $this->at('2024-12-24 00:00:00')));
+    }
+
+    public function testGetOpenIntervalsForDateSpecialOverrideWinsOverWeekly(): void
+    {
+        $location = $this->location(
+            'UTC',
+            $this->openingHours([[2, '09:00', '17:00']]),
+            $this->specialHours([['2024-12-24', false, '10:00', '14:00']])
+        );
+
+        $intervals = $this->service->getOpenIntervalsForDate($location, $this->at('2024-12-24 00:00:00'));
+
+        static::assertCount(1, $intervals);
+        static::assertSame('2024-12-24 10:00', $intervals[0]['start']->format('Y-m-d H:i'));
+        static::assertSame('2024-12-24 14:00', $intervals[0]['end']->format('Y-m-d H:i'));
+    }
+
+    public function testGetOpenIntervalsForDateSkipsSpecialRowsWithoutTimes(): void
+    {
+        // Not a closure, but no usable open/close → buildRange yields no interval.
+        $location = $this->location(
+            'UTC',
+            $this->openingHours([[2, '09:00', '17:00']]),
+            $this->specialHours([['2024-12-24', false, null, null]])
+        );
+
+        static::assertSame([], $this->service->getOpenIntervalsForDate($location, $this->at('2024-12-24 00:00:00')));
+    }
+
     private function at(string $utc): \DateTimeImmutable
     {
         return new \DateTimeImmutable($utc, new \DateTimeZone('UTC'));

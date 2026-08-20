@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Event;
 
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Event\PickupOrderPlacedEvent;
+use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -28,8 +30,10 @@ class PickupOrderPlacedEventTest extends TestCase
         static::assertSame('pickup.order.placed', $event->getName());
         static::assertContains(OrderAware::ORDER, $available);
         static::assertContains(PickupLocationAware::PICKUP_LOCATION, $available);
+        static::assertContains(OrderPickupLocationAware::ORDER_PICKUP_LOCATION, $available);
         static::assertInstanceOf(OrderAware::class, $event);
         static::assertInstanceOf(PickupLocationAware::class, $event);
+        static::assertInstanceOf(OrderPickupLocationAware::class, $event);
     }
 
     public function testExposesOrderPickupLocationAndSalesChannelData(): void
@@ -41,6 +45,8 @@ class PickupOrderPlacedEventTest extends TestCase
         static::assertSame('0123456789abcdef0123456789abcdef', $event->getOrder()->getId());
         static::assertSame('fedcba9876543210fedcba9876543210', $event->getPickupLocationId());
         static::assertSame('fedcba9876543210fedcba9876543210', $event->getPickupLocation()->getId());
+        static::assertSame('cccccccccccccccccccccccccccccccc', $event->getOrderPickupLocationId());
+        static::assertSame('cccccccccccccccccccccccccccccccc', $event->getOrderPickupLocation()->getId());
         static::assertSame('11111111111111111111111111111111', $event->getSalesChannelId());
         static::assertSame('22222222222222222222222222222222', $event->getCustomerGroupId());
         static::assertSame($salesChannelContext, $event->getSalesChannelContext());
@@ -77,7 +83,7 @@ class PickupOrderPlacedEventTest extends TestCase
         $location = new PickupLocationEntity();
         $location->setId('fedcba9876543210fedcba9876543210');
 
-        $event = new PickupOrderPlacedEvent($this->salesChannelContext(), $order, $location);
+        $event = new PickupOrderPlacedEvent($this->salesChannelContext(), $order, $location, $this->pickupRecord($location));
 
         $this->expectExceptionObject(
             \Shopware\Core\Checkout\Cart\CartException::orderCustomerDeleted($order->getId())
@@ -106,8 +112,19 @@ class PickupOrderPlacedEventTest extends TestCase
             $salesChannelContext ?? $this->salesChannelContext(),
             $order,
             $location,
+            $this->pickupRecord($location),
             $mailStruct
         );
+    }
+
+    private function pickupRecord(PickupLocationEntity $location): OrderPickupLocationEntity
+    {
+        $record = new OrderPickupLocationEntity();
+        $record->setId('cccccccccccccccccccccccccccccccc');
+        $record->setUniqueIdentifier('cccccccccccccccccccccccccccccccc');
+        $record->setPickupLocation($location);
+
+        return $record;
     }
 
     private function salesChannelContext(): SalesChannelContext

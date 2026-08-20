@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Listener;
 
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\OrderPickupLocationWriter;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextStorage;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupSelection;
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Event\PickupOrderPlacedEvent;
-use Kommandhub\ClickAndPickSW\Installer\CustomFieldsInstaller;
-use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
 use Kommandhub\ClickAndPickSW\Listener\OrderListener;
 use Kommandhub\ClickAndPickSW\PickupLocation\PickupLocationSelectionResolver;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,102 +18,62 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\Event\CheckoutOrderPlacedEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
-use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEvent;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
-use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 #[CoversClass(OrderListener::class)]
-#[UsesClass(PickupLocationSelectionResolver::class)]
 #[UsesClass(PickupOrderPlacedEvent::class)]
+#[UsesClass(PickupSelection::class)]
 class OrderListenerTest extends TestCase
 {
     private const ORDER_ID = '0123456789abcdef0123456789abcdef';
-    private const SALES_CHANNEL_ID = '11111111111111111111111111111111';
     private const LOCATION_ID = 'fedcba9876543210fedcba9876543210';
-    private const SECOND_LOCATION_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-    private EntityRepository&MockObject $orderRepository;
-
-    private EntityRepository&MockObject $pickupLocationRepository;
-
+    private PickupLocationSelectionResolver&MockObject $resolver;
+    private OrderPickupLocationWriter&MockObject $writer;
+    private PickupContextStorage&MockObject $pickupContextStorage;
     private EventDispatcherInterface&MockObject $eventDispatcher;
-
     private OrderListener $listener;
 
     protected function setUp(): void
     {
-        $this->orderRepository = $this->createMock(EntityRepository::class);
-        $this->pickupLocationRepository = $this->createMock(EntityRepository::class);
+        $this->resolver = $this->createMock(PickupLocationSelectionResolver::class);
+        $this->writer = $this->createMock(OrderPickupLocationWriter::class);
+        $this->pickupContextStorage = $this->createMock(PickupContextStorage::class);
         $this->eventDispatcher = $this->createMock(EventDispatcherInterface::class);
 
         $this->listener = new OrderListener(
-            $this->orderRepository,
-            $this->pickupLocationRepository,
-            new PickupLocationSelectionResolver($this->pickupLocationRepository),
-            $this->eventDispatcher,
+            $this->resolver,
+            $this->writer,
+            $this->pickupContextStorage,
+            $this->eventDispatcher
         );
     }
 
-    public function testDispatchesFlowTriggerAndPersistsPickupLocationForValidPickupOrder(): void
+    public function testPersistsPickupRecordAndDispatchesTriggerForPickupOrder(): void
     {
-        $order = $this->order(['existing' => 'value']);
+        $order = $this->order();
         $context = Context::createDefaultContext();
-        $salesChannelContext = $this->salesChannelContext(
-            $this->pickupShippingMethod(),
-            new ArrayStruct([
-                'id' => self::LOCATION_ID,
-                'pickupLocationId' => self::LOCATION_ID,
-            ]),
-            $context
-        );
-        $pickupLocation = $this->location(self::LOCATION_ID, 'Downtown Store');
+        $salesChannelContext = $this->salesChannelContext($context);
 
-        $this->orderRepository
+        $location = new PickupLocationEntity();
+        $location->setId(self::LOCATION_ID);
+        $pickupTime = new \DateTimeImmutable('2024-06-03 10:00:00');
+        $selection = new PickupSelection($location, $pickupTime, 'Ring the bell');
+
+        $record = new OrderPickupLocationEntity();
+        $record->setId('cccccccccccccccccccccccccccccccc');
+        $record->setPickupLocation($location);
+
+        $this->resolver->method('isPickupShippingMethod')->with($salesChannelContext)->willReturn(true);
+        $this->resolver->method('resolveSelection')->with($salesChannelContext)->willReturn($selection);
+
+        $this->writer
             ->expects(static::once())
-            ->method('update')
-            ->with([[
-                'id' => self::ORDER_ID,
-                'customFields' => [
-                    'existing' => 'value',
-                    CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::LOCATION_ID,
-                ],
-            ]], $context);
-
-        $this->pickupLocationRepository
-            ->expects(static::once())
-            ->method('search')
-            ->with(
-                static::callback(function (Criteria $criteria): bool {
-                    $filters = $criteria->getFilters();
-                    $filter = $filters[0] ?? null;
-
-                    if (!$filter instanceof \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter) {
-                        return false;
-                    }
-
-                    $queries = $filter->getQueries();
-
-                    return $criteria->getLimit() === 1
-                        && $queries[0] instanceof \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter
-                        && $queries[0]->getField() === 'id'
-                        && $queries[0]->getValue() === self::LOCATION_ID
-                        && $queries[1] instanceof \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter
-                        && $queries[1]->getField() === 'active'
-                        && $queries[1]->getValue() === true
-                        && $queries[2] instanceof \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter
-                        && $queries[2]->getField() === 'salesChannels.id'
-                        && $queries[2]->getValue() === self::SALES_CHANNEL_ID;
-                }),
-                $context
-            )
-            ->willReturn($this->firstResult($pickupLocation));
+            ->method('persist')
+            ->with(self::ORDER_ID, $selection, $context)
+            ->willReturn($record);
 
         $this->eventDispatcher
             ->expects(static::once())
@@ -119,258 +81,58 @@ class OrderListenerTest extends TestCase
             ->with(
                 static::callback(
                     static fn (object $event): bool => $event instanceof PickupOrderPlacedEvent
-                        && $event->getPickupLocation() === $pickupLocation
+                        && $event->getPickupLocation() === $location
                         && $event->getOrder() === $order
-                        && $event->getSalesChannelContext() === $salesChannelContext
+                        && $event->getOrderPickupLocation() === $record
                 ),
                 PickupOrderPlacedEvent::EVENT_NAME
             )
             ->willReturnArgument(0);
 
-        $this->listener->onCheckoutOrderPlacedEvent(
-            new CheckoutOrderPlacedEvent($salesChannelContext, $order)
-        );
+        // The context selection is cleared once it is persisted on the order.
+        $this->pickupContextStorage->expects(static::once())->method('clear')->with($salesChannelContext);
+
+        $this->listener->onCheckoutOrderPlacedEvent(new CheckoutOrderPlacedEvent($salesChannelContext, $order));
     }
 
-    public function testDoesNothingForNormalDeliveryOrder(): void
+    public function testDoesNothingForNonPickupShippingMethod(): void
     {
-        $order = $this->order();
+        $salesChannelContext = $this->salesChannelContext(Context::createDefaultContext());
+        $this->resolver->method('isPickupShippingMethod')->willReturn(false);
 
+        $this->writer->expects(static::never())->method('persist');
         $this->eventDispatcher->expects(static::never())->method('dispatch');
-        $this->orderRepository->expects(static::never())->method('update');
-        $this->pickupLocationRepository->expects(static::never())->method('search');
+        $this->pickupContextStorage->expects(static::never())->method('clear');
 
-        $this->listener->onCheckoutOrderPlacedEvent(
-            new CheckoutOrderPlacedEvent(
-                $this->salesChannelContext(
-                    $this->shippingMethod('different-shipping-id'),
-                    null,
-                    Context::createDefaultContext()
-                ),
-                $order
-            )
-        );
+        $this->listener->onCheckoutOrderPlacedEvent(new CheckoutOrderPlacedEvent($salesChannelContext, $this->order()));
     }
 
-    public function testDoesNothingWhenPickupShippingDoesNotResolveToValidLocation(): void
+    public function testDoesNothingWhenSelectionCannotBeResolved(): void
     {
-        $order = $this->order();
-        $context = Context::createDefaultContext();
-        $salesChannelContext = $this->salesChannelContext(
-            $this->pickupShippingMethod(),
-            new ArrayStruct([
-                'id' => self::LOCATION_ID,
-                'pickupLocationId' => self::LOCATION_ID,
-            ]),
-            $context
-        );
+        $salesChannelContext = $this->salesChannelContext(Context::createDefaultContext());
+        $this->resolver->method('isPickupShippingMethod')->willReturn(true);
+        $this->resolver->method('resolveSelection')->willReturn(null);
 
-        $this->pickupLocationRepository
-            ->expects(static::once())
-            ->method('search')
-            ->with(static::isInstanceOf(Criteria::class), $context)
-            ->willReturn($this->firstResult(null));
+        $this->writer->expects(static::never())->method('persist');
         $this->eventDispatcher->expects(static::never())->method('dispatch');
-        $this->orderRepository->expects(static::never())->method('update');
+        $this->pickupContextStorage->expects(static::never())->method('clear');
 
-        $this->listener->onCheckoutOrderPlacedEvent(
-            new CheckoutOrderPlacedEvent($salesChannelContext, $order)
-        );
+        $this->listener->onCheckoutOrderPlacedEvent(new CheckoutOrderPlacedEvent($salesChannelContext, $this->order()));
     }
 
-    public function testIgnoresPickupExtensionForNormalDeliveryOrders(): void
-    {
-        $order = $this->order();
-
-        $this->pickupLocationRepository->expects(static::never())->method('search');
-        $this->orderRepository->expects(static::never())->method('update');
-        $this->eventDispatcher->expects(static::never())->method('dispatch');
-
-        $this->listener->onCheckoutOrderPlacedEvent(
-            new CheckoutOrderPlacedEvent(
-                $this->salesChannelContext(
-                    $this->shippingMethod('different-shipping-id'),
-                    new ArrayStruct([
-                        'id' => self::LOCATION_ID,
-                        'pickupLocationId' => self::LOCATION_ID,
-                    ]),
-                    Context::createDefaultContext()
-                ),
-                $order
-            )
-        );
-    }
-
-    public function testAttachesPickupLocationExtensionsOnOrderLoaded(): void
-    {
-        $orderWithMatch = $this->order([
-            CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::LOCATION_ID,
-        ]);
-        $orderWithoutMatch = new OrderEntity();
-        $orderWithoutMatch->setId('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
-        $orderWithoutMatch->setCustomFields([
-            CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::SECOND_LOCATION_ID,
-        ]);
-
-        $pickupLocation = $this->location(self::LOCATION_ID, 'Downtown Store');
-        $event = $this->loadedEvent([$orderWithMatch, new PickupLocationEntity(), $orderWithoutMatch]);
-
-        $this->pickupLocationRepository
-            ->expects(static::once())
-            ->method('search')
-            ->with(
-                static::callback(static fn (Criteria $criteria): bool => $criteria->getIds() === [
-                    self::LOCATION_ID,
-                    self::SECOND_LOCATION_ID,
-                ]),
-                $event->getContext()
-            )
-            ->willReturn($this->entitiesResult([$pickupLocation]));
-
-        $this->listener->onOrderLoaded($event);
-
-        static::assertSame($pickupLocation, $orderWithMatch->getExtension(OrderListener::PICKUP_LOCATION_EXTENSION));
-        static::assertNull($orderWithoutMatch->getExtension(OrderListener::PICKUP_LOCATION_EXTENSION));
-    }
-
-    public function testSkipsOrderLoadedWhenNoPickupLocationsAreStoredOnOrders(): void
-    {
-        $event = $this->loadedEvent([$this->order(), new PickupLocationEntity()]);
-
-        $this->pickupLocationRepository->expects(static::never())->method('search');
-
-        $this->listener->onOrderLoaded($event);
-    }
-
-    public function testSkipsOrderLoadedWhenStoredPickupLocationsCannotBeResolved(): void
-    {
-        $order = $this->order([
-            CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::LOCATION_ID,
-        ]);
-        $event = $this->loadedEvent([$order]);
-
-        $this->pickupLocationRepository
-            ->expects(static::once())
-            ->method('search')
-            ->willReturn($this->entitiesResult([]));
-
-        $this->listener->onOrderLoaded($event);
-
-        static::assertNull($order->getExtension(OrderListener::PICKUP_LOCATION_EXTENSION));
-    }
-
-    public function testSkipsUnexpectedRepositoryEntitiesWhenAttachingPickupLocations(): void
-    {
-        $order = $this->order([
-            CustomFieldsInstaller::ORDER_PICKUP_LOCATION_CUSTOM_FIELD => self::LOCATION_ID,
-        ]);
-        $event = $this->loadedEvent([$order]);
-
-        $this->pickupLocationRepository
-            ->expects(static::once())
-            ->method('search')
-            ->willReturn($this->mixedEntitiesResult([new \stdClass()]));
-
-        $this->listener->onOrderLoaded($event);
-
-        static::assertNull($order->getExtension(OrderListener::PICKUP_LOCATION_EXTENSION));
-    }
-
-    /**
-     * @param array<string, mixed> $customFields
-     */
-    private function order(array $customFields = []): OrderEntity
+    private function order(): OrderEntity
     {
         $order = new OrderEntity();
         $order->setId(self::ORDER_ID);
-        $order->setCustomFields($customFields);
 
         return $order;
     }
 
-    private function location(string $id, string $name): PickupLocationEntity
+    private function salesChannelContext(Context $context): SalesChannelContext&MockObject
     {
-        $location = new PickupLocationEntity();
-        $location->setId($id);
-        $location->setName($name);
-
-        return $location;
-    }
-
-    private function salesChannelContext(
-        ShippingMethodEntity $shippingMethod,
-        ?ArrayStruct $pickupExtension,
-        Context $context
-    ): SalesChannelContext&MockObject {
-        $salesChannelContext = $this->getMockBuilder(SalesChannelContext::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getContext', 'getShippingMethod', 'getSalesChannelId'])
-            ->getMock();
+        $salesChannelContext = $this->createMock(SalesChannelContext::class);
         $salesChannelContext->method('getContext')->willReturn($context);
-        $salesChannelContext->method('getShippingMethod')->willReturn($shippingMethod);
-        $salesChannelContext->method('getSalesChannelId')->willReturn(self::SALES_CHANNEL_ID);
-
-        if ($pickupExtension !== null) {
-            $salesChannelContext->addExtension(OrderListener::PICKUP_LOCATION_EXTENSION, $pickupExtension);
-        }
 
         return $salesChannelContext;
-    }
-
-    /**
-     * @param list<\Shopware\Core\Framework\DataAbstractionLayer\Entity> $entities
-     */
-    private function loadedEvent(array $entities): EntityLoadedEvent
-    {
-        $definition = $this->createMock(\Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition::class);
-        $definition->method('getEntityName')->willReturn('order');
-
-        return new EntityLoadedEvent($definition, $entities, Context::createDefaultContext());
-    }
-
-    private function firstResult(?object $first): EntitySearchResult&MockObject
-    {
-        $result = $this->createMock(EntitySearchResult::class);
-        $result->method('first')->willReturn($first);
-
-        return $result;
-    }
-
-    private function shippingMethod(string $id): ShippingMethodEntity
-    {
-        $shippingMethod = new ShippingMethodEntity();
-        $shippingMethod->setId($id);
-
-        return $shippingMethod;
-    }
-
-    private function pickupShippingMethod(): ShippingMethodEntity
-    {
-        return $this->shippingMethod(KommandhubClickAndPickSW::SHIPPING_METHOD_ID);
-    }
-
-    /**
-     * @param list<PickupLocationEntity> $entities
-     */
-    private function entitiesResult(array $entities): EntitySearchResult&MockObject
-    {
-        $result = $this->createMock(EntitySearchResult::class);
-        $result->method('getEntities')->willReturn(new EntityCollection($entities));
-
-        return $result;
-    }
-
-    /**
-     * @param list<object> $entities
-     */
-    private function mixedEntitiesResult(array $entities): EntitySearchResult&MockObject
-    {
-        $collection = $this->createMock(EntityCollection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator($entities));
-
-        $result = $this->createMock(EntitySearchResult::class);
-        $result->method('getEntities')->willReturn($collection);
-
-        return $result;
     }
 }

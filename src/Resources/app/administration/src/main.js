@@ -1,4 +1,5 @@
 import './module/kommandhub-pickup-location';
+import './module/kommandhub-order-pickup-info';
 
 // Flow Builder: "Send Pickup Notification to Admin" action integration.
 import './snippet';

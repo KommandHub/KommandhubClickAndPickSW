@@ -4,280 +4,203 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Listener;
 
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Query\QueryBuilder;
-use Doctrine\DBAL\Result;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextKeys;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\PickupContextStorage;
+use Kommandhub\ClickAndPickSW\Checkout\PickupSelection\StoredPickupSelection;
+use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
 use Kommandhub\ClickAndPickSW\Listener\SwitchContextEventListener;
+use Kommandhub\ClickAndPickSW\PickupLocation\PickupLocationValidator;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\Checkout\Customer\CustomerEntity;
-use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
-use Shopware\Core\Framework\DataAbstractionLayer\Validation\EntityExists;
+use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
 use Shopware\Core\Framework\Routing\Event\SalesChannelContextResolvedEvent;
-use Shopware\Core\Framework\Uuid\Uuid;
-use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
+use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\Framework\Validation\DataValidationDefinition;
-use Shopware\Core\Framework\Validation\DataValidator;
-use Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister;
 use Shopware\Core\System\SalesChannel\Event\SwitchContextEvent;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 
 #[CoversClass(SwitchContextEventListener::class)]
+#[UsesClass(StoredPickupSelection::class)]
 class SwitchContextEventListenerTest extends TestCase
 {
+    private const LOCATION_ID = 'fedcba9876543210fedcba9876543210';
     private const TOKEN = 'context-token';
-    private const SALES_CHANNEL_ID = '11111111111111111111111111111111';
-    private const PICKUP_LOCATION_ID = 'fedcba9876543210fedcba9876543210';
 
-    private DataValidator&MockObject $validator;
+    private PickupContextStorage&MockObject $storage;
 
-    private SalesChannelContextPersister&MockObject $contextPersister;
-
-    private Connection&MockObject $connection;
+    private PickupLocationValidator&MockObject $validator;
 
     private SwitchContextEventListener $listener;
 
     protected function setUp(): void
     {
-        $this->validator = $this->createMock(DataValidator::class);
-        $this->contextPersister = $this->createMock(SalesChannelContextPersister::class);
-        $this->connection = $this->createMock(Connection::class);
-
-        $this->listener = new SwitchContextEventListener(
-            $this->validator,
-            $this->contextPersister,
-            $this->connection
-        );
+        $this->storage = $this->createMock(PickupContextStorage::class);
+        $this->validator = $this->createMock(PickupLocationValidator::class);
+        $this->listener = new SwitchContextEventListener($this->storage, $this->validator);
     }
 
-    public function testOnSwitchContextClearsPickupLocationWhenNoNewIdProvided(): void
+    public function testIgnoresSwitchesWithoutPickupField(): void
     {
-        $context = $this->salesChannelContext(customerId: 'customer-id');
-        $this->expectPayloadFetch(['existing' => 'value']);
+        // A payment- or address-only context switch carries no pickup field and
+        // must not validate or touch the stored selection.
+        $this->validator->expects(static::never())->method('validate');
+        $this->storage->expects(static::never())->method('save');
+        $this->storage->expects(static::never())->method('clear');
+
+        $this->listener->onSwitchContext($this->switchEvent(
+            new RequestDataBag(['paymentMethodId' => 'some-payment-method'])
+        ));
+    }
+
+    public function testClearsSelectionWhenPickupFieldIsExplicitlyEmpty(): void
+    {
+        $context = $this->context();
 
         $this->validator->expects(static::never())->method('validate');
-        $this->contextPersister
-            ->expects(static::once())
-            ->method('save')
-            ->with(
-                self::TOKEN,
-                ['existing' => 'value', SwitchContextEventListener::PICKUP_LOCATION_ID => null],
-                self::SALES_CHANNEL_ID,
-                'customer-id'
-            );
+        $this->storage->expects(static::once())->method('clear')->with($context);
+        $this->storage->expects(static::never())->method('save');
 
-        $this->listener->onSwitchContext(
-            new SwitchContextEvent(
-                new RequestDataBag(),
-                $context,
-                new DataValidationDefinition(),
-                []
-            )
-        );
+        $this->listener->onSwitchContext($this->switchEvent(
+            new RequestDataBag([PickupContextKeys::LOCATION_ID => '']),
+            $context
+        ));
     }
 
-    public function testOnSwitchContextValidatesAndPersistsPickupLocation(): void
+    public function testTreatsNonStringPickupFieldAsCleared(): void
     {
-        $context = $this->salesChannelContext(permissions: ['admin' => true]);
-        $this->expectPayloadFetch(['existing' => 'value']);
+        $context = $this->context();
+
+        // A present-but-non-string value normalizes to null → treated as a clear,
+        // never validated or persisted as a location.
+        $this->validator->expects(static::never())->method('validate');
+        $this->storage->expects(static::once())->method('clear')->with($context);
+        $this->storage->expects(static::never())->method('save');
+
+        $this->listener->onSwitchContext($this->switchEvent(
+            new RequestDataBag([PickupContextKeys::LOCATION_ID => ['unexpected']]),
+            $context
+        ));
+    }
+
+    public function testValidatesAndPersistsSelection(): void
+    {
+        $context = $this->context();
 
         $this->validator
             ->expects(static::once())
             ->method('validate')
-            ->with(
-                [SwitchContextEventListener::PICKUP_LOCATION_ID => self::PICKUP_LOCATION_ID],
-                static::callback(function (DataValidationDefinition $definition) use ($context): bool {
-                    $constraint = $definition->getProperty(SwitchContextEventListener::PICKUP_LOCATION_ID)[0] ?? null;
+            ->with(self::LOCATION_ID, $context);
 
-                    if (!$constraint instanceof EntityExists) {
-                        return false;
-                    }
-
-                    $criteria = $constraint->getCriteria();
-                    $filters = $criteria->getFilters();
-                    $multiFilter = $filters[0] ?? null;
-
-                    if (!$multiFilter instanceof MultiFilter || $criteria->getLimit() !== 1) {
-                        return false;
-                    }
-
-                    $queries = $multiFilter->getQueries();
-
-                    return $definition->getName() === 'kommandhub_click_and_pick.context_switch'
-                        && $constraint->getEntity() === 'kommandhub_pickup_location'
-                        && $constraint->getContext() === $context->getContext()
-                        && $multiFilter->getOperator() === MultiFilter::CONNECTION_AND
-                        && $queries[0] instanceof EqualsFilter
-                        && $queries[0]->getField() === 'id'
-                        && $queries[0]->getValue() === self::PICKUP_LOCATION_ID
-                        && $queries[1] instanceof EqualsFilter
-                        && $queries[1]->getField() === 'active'
-                        && $queries[1]->getValue() === true
-                        && $queries[2] instanceof EqualsFilter
-                        && $queries[2]->getField() === 'salesChannels.id'
-                        && $queries[2]->getValue() === self::SALES_CHANNEL_ID;
-                })
-            );
-        $this->contextPersister
+        $this->storage
             ->expects(static::once())
             ->method('save')
             ->with(
-                self::TOKEN,
-                ['existing' => 'value', SwitchContextEventListener::PICKUP_LOCATION_ID => self::PICKUP_LOCATION_ID],
-                self::SALES_CHANNEL_ID,
-                null
+                $context,
+                static::callback(static fn (StoredPickupSelection $selection): bool => $selection->pickupLocationId === self::LOCATION_ID
+                    && $selection->pickupTime === '2024-06-03T10:00:00+01:00'
+                    && $selection->comment === 'Ring the bell')
             );
 
-        $this->listener->onSwitchContext(
-            new SwitchContextEvent(
-                new RequestDataBag([SwitchContextEventListener::PICKUP_LOCATION_ID => self::PICKUP_LOCATION_ID]),
-                $context,
-                new DataValidationDefinition(),
-                []
-            )
-        );
+        $this->listener->onSwitchContext($this->switchEvent(
+            new RequestDataBag([
+                PickupContextKeys::LOCATION_ID => self::LOCATION_ID,
+                PickupContextKeys::TIME => ' 2024-06-03T10:00:00+01:00 ',
+                PickupContextKeys::COMMENT => ' Ring the bell ',
+            ]),
+            $context
+        ));
     }
 
-    public function testOnSwitchContextDoesNothingWhenNoStoredPayloadExists(): void
+    public function testDoesNotPersistWhenValidationFails(): void
     {
-        $this->expectPayloadFetch(null);
-        $this->validator->expects(static::never())->method('validate');
-        $this->contextPersister->expects(static::never())->method('save');
+        $context = $this->context();
 
-        $this->listener->onSwitchContext(
-            new SwitchContextEvent(
-                new RequestDataBag(),
-                $this->salesChannelContext(),
-                new DataValidationDefinition(),
-                []
-            )
-        );
+        $this->validator
+            ->method('validate')
+            ->willThrowException(new \RuntimeException('invalid location'));
+
+        $this->storage->expects(static::never())->method('save');
+
+        $this->expectException(\RuntimeException::class);
+
+        $this->listener->onSwitchContext($this->switchEvent(
+            new RequestDataBag([PickupContextKeys::LOCATION_ID => self::LOCATION_ID]),
+            $context
+        ));
     }
 
-    public function testOnSwitchContextDoesNotPersistExpiredPayload(): void
+    public function testResolvedIgnoresNonPickupShippingMethod(): void
     {
-        $this->expectPayloadFetch(['expired' => true]);
-        $this->validator->expects(static::never())->method('validate');
-        $this->contextPersister->expects(static::never())->method('save');
+        // No lookup at all when the customer is not on the Click & Pick method.
+        $this->storage->expects(static::never())->method('load');
 
-        $this->listener->onSwitchContext(
-            new SwitchContextEvent(
-                new RequestDataBag(),
-                $this->salesChannelContext(),
-                new DataValidationDefinition(),
-                []
-            )
-        );
-    }
-
-    public function testOnSalesChannelContextResolvedAddsPickupExtension(): void
-    {
-        $context = $this->salesChannelContext();
-        $this->expectPayloadFetch([SwitchContextEventListener::PICKUP_LOCATION_ID => self::PICKUP_LOCATION_ID]);
+        $context = $this->context('some-other-shipping-method');
 
         $this->listener->onSalesChannelContextResolved(
             new SalesChannelContextResolvedEvent($context, self::TOKEN)
         );
 
-        $extension = $context->getExtension(SwitchContextEventListener::PICKUP_LOCATION_EXTENSION);
-
-        static::assertNotNull($extension);
-        static::assertSame(self::PICKUP_LOCATION_ID, $extension->getVars()['id']);
-        static::assertSame(
-            self::PICKUP_LOCATION_ID,
-            $extension->getVars()[SwitchContextEventListener::PICKUP_LOCATION_ID]
-        );
+        static::assertNull($context->getExtension(PickupContextKeys::EXTENSION));
     }
 
-    public function testOnSalesChannelContextResolvedIgnoresMissingPayload(): void
+    public function testResolvedAttachesStoredSelectionAsExtension(): void
     {
-        $context = $this->salesChannelContext();
-        $this->expectPayloadFetch(null);
+        $context = $this->context(KommandhubClickAndPickSW::SHIPPING_METHOD_ID);
+
+        $this->storage
+            ->method('load')
+            ->with($context)
+            ->willReturn(new StoredPickupSelection(self::LOCATION_ID, '2024-06-03T10:00:00+01:00', 'Ring the bell'));
 
         $this->listener->onSalesChannelContextResolved(
             new SalesChannelContextResolvedEvent($context, self::TOKEN)
         );
 
-        static::assertNull($context->getExtension(SwitchContextEventListener::PICKUP_LOCATION_EXTENSION));
+        $extension = $context->getExtension(PickupContextKeys::EXTENSION);
+
+        static::assertInstanceOf(ArrayStruct::class, $extension);
+        static::assertSame(self::LOCATION_ID, $extension->get(PickupContextKeys::LEGACY_ID));
+        static::assertSame(self::LOCATION_ID, $extension->get(PickupContextKeys::LOCATION_ID));
+        static::assertSame('2024-06-03T10:00:00+01:00', $extension->get(PickupContextKeys::TIME));
+        static::assertSame('Ring the bell', $extension->get(PickupContextKeys::COMMENT));
     }
 
-    public function testOnSalesChannelContextResolvedIgnoresPayloadWithoutPickupLocation(): void
+    public function testResolvedAttachesNothingWhenSelectionEmpty(): void
     {
-        $context = $this->salesChannelContext();
-        $this->expectPayloadFetch(['somethingElse' => true]);
+        $context = $this->context(KommandhubClickAndPickSW::SHIPPING_METHOD_ID);
+
+        $this->storage->method('load')->willReturn(new StoredPickupSelection());
 
         $this->listener->onSalesChannelContextResolved(
             new SalesChannelContextResolvedEvent($context, self::TOKEN)
         );
 
-        static::assertNull($context->getExtension(SwitchContextEventListener::PICKUP_LOCATION_EXTENSION));
+        static::assertNull($context->getExtension(PickupContextKeys::EXTENSION));
     }
 
-    /**
-     * @param array<string, mixed>|null $payload
-     */
-    private function expectPayloadFetch(?array $payload): void
+    private function switchEvent(RequestDataBag $requestData, ?SalesChannelContext $context = null): SwitchContextEvent
     {
-        $result = $this->createMock(Result::class);
-        $result
-            ->expects(static::once())
-            ->method('fetchOne')
-            ->willReturn($payload === null ? false : json_encode($payload, \JSON_THROW_ON_ERROR));
-
-        $queryBuilder = $this->getMockBuilder(QueryBuilder::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['select', 'from', 'where', 'andWhere', 'setParameter', 'executeQuery'])
-            ->getMock();
-        $queryBuilder->method('select')->with('payload')->willReturnSelf();
-        $queryBuilder->method('from')->with('sales_channel_api_context')->willReturnSelf();
-        $queryBuilder->method('where')->with('token = :token')->willReturnSelf();
-        $queryBuilder->method('andWhere')->with('sales_channel_id = :salesChannelId')->willReturnSelf();
-        $queryBuilder->expects(static::exactly(2))
-            ->method('setParameter')
-            ->willReturnCallback(function (string $key, mixed $value) use ($queryBuilder) {
-                if ($key === 'token') {
-                    static::assertSame(self::TOKEN, $value);
-                }
-
-                if ($key === 'salesChannelId') {
-                    static::assertSame(Uuid::fromHexToBytes(self::SALES_CHANNEL_ID), $value);
-                }
-
-                return $queryBuilder;
-            });
-        $queryBuilder->expects(static::once())->method('executeQuery')->willReturn($result);
-
-        $this->connection
-            ->expects(static::once())
-            ->method('createQueryBuilder')
-            ->willReturn($queryBuilder);
+        return new SwitchContextEvent(
+            $requestData,
+            $context ?? $this->context(),
+            new DataValidationDefinition(),
+            []
+        );
     }
 
-    /**
-     * @param array<string, bool> $permissions
-     */
-    private function salesChannelContext(?string $customerId = null, array $permissions = []): SalesChannelContext
+    private function context(?string $shippingMethodId = null): SalesChannelContext&MockObject
     {
         $context = $this->getMockBuilder(SalesChannelContext::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['getContext', 'getToken', 'getSalesChannelId', 'getCustomer', 'getPermissions'])
+            ->onlyMethods(['getShippingMethod'])
             ->getMock();
-        $context->method('getContext')->willReturn(Context::createDefaultContext());
-        $context->method('getToken')->willReturn(self::TOKEN);
-        $context->method('getSalesChannelId')->willReturn(self::SALES_CHANNEL_ID);
-        $context->method('getPermissions')->willReturn($permissions);
 
-        $customer = null;
-
-        if ($customerId !== null) {
-            $customer = new CustomerEntity();
-            $customer->setId($customerId);
-        }
-
-        $context->method('getCustomer')->willReturn($customer);
+        $shippingMethod = new ShippingMethodEntity();
+        $shippingMethod->setId($shippingMethodId ?? 'default-shipping-method');
+        $context->method('getShippingMethod')->willReturn($shippingMethod);
 
         return $context;
     }

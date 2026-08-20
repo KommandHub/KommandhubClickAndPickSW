@@ -67,7 +67,11 @@ export default {
         },
 
         cardLabel() {
-            return this.pickupLocation.isNew() ? this.$tc('kommandhub-pickup-location.create.title') : this.$tc('kommandhub-pickup-location.edit.title');
+            // pickupLocation loads asynchronously; treat "no id yet" as the
+            // create case until the entity is available.
+            return this.pickupLocation?.isNew?.() ?? !this.pickupLocationId
+                ? this.$tc('kommandhub-pickup-location.create.title')
+                : this.$tc('kommandhub-pickup-location.edit.title');
         }
     },
 

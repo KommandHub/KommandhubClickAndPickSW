@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Checkout\Cart;
 
+use Kommandhub\ClickAndPickSW\Checkout\Cart\Error\InvalidPickupTimeCartBlockerError;
 use Kommandhub\ClickAndPickSW\Checkout\Cart\Error\PickupLocationRequiredCartBlockerError;
 use Kommandhub\ClickAndPickSW\Checkout\Cart\Error\UnsupportedDeliveryMethodCartBlockerError;
 use Kommandhub\ClickAndPickSW\Checkout\Payment\PayOnPickupPaymentHandler;
+use Kommandhub\ClickAndPickSW\PickupLocation\Availability\PickupTimeSlotService;
 use Kommandhub\ClickAndPickSW\PickupLocation\PickupLocationSelectionResolver;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartValidatorInterface;
@@ -19,6 +21,7 @@ readonly class PayOnPickupCartProcessor implements CartValidatorInterface
 {
     public function __construct(
         private PickupLocationSelectionResolver $pickupLocationSelectionResolver,
+        private PickupTimeSlotService $pickupTimeSlotService,
     ) {
     }
 
@@ -63,10 +66,20 @@ readonly class PayOnPickupCartProcessor implements CartValidatorInterface
             return;
         }
 
-        if ($this->pickupLocationSelectionResolver->resolve($context) !== null) {
+        $selection = $this->pickupLocationSelectionResolver->resolveSelection($context);
+
+        if ($selection === null) {
+            $errors->add(new PickupLocationRequiredCartBlockerError());
+
             return;
         }
 
-        $errors->add(new PickupLocationRequiredCartBlockerError());
+        // Server-side pickup-time validation gate: a chosen time must fall inside
+        // the location's schedule (its timezone, overrides and future rules).
+        if ($selection->pickupTime !== null
+            && !$this->pickupTimeSlotService->isBookable($selection->pickupLocation, $selection->pickupTime)
+        ) {
+            $errors->add(new InvalidPickupTimeCartBlockerError());
+        }
     }
 }

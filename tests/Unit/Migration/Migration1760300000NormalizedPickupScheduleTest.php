@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Kommandhub\ClickAndPickSW\Tests\Unit\Migration;
 
 use Kommandhub\ClickAndPickSW\Migration\Migration1760300000NormalizedPickupSchedule;
+use Kommandhub\ClickAndPickSW\PickupLocation\Availability\Weekday;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -13,6 +15,7 @@ use PHPUnit\Framework\TestCase;
  * and DB writes belong to a kernel integration test.
  */
 #[CoversClass(Migration1760300000NormalizedPickupSchedule::class)]
+#[UsesClass(Weekday::class)]
 class Migration1760300000NormalizedPickupScheduleTest extends TestCase
 {
     public function testTimestamp(): void

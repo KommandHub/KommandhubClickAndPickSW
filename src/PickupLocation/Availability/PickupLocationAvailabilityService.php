@@ -84,6 +84,76 @@ class PickupLocationAvailabilityService
     }
 
     /**
+     * Concrete open intervals for a location on the given local date, as
+     * timezone-aware start/end instants. Special-date overrides win over the
+     * weekly schedule; a closure yields no intervals. This is the schedule seam
+     * the slot generator builds on.
+     *
+     * @return list<array{start: \DateTimeImmutable, end: \DateTimeImmutable}>
+     */
+    public function getOpenIntervalsForDate(PickupLocationEntity $location, \DateTimeImmutable $date): array
+    {
+        $timezone = $this->resolveTimezone($location->getTimezone());
+        $local = $date->setTimezone($timezone);
+        $localDate = $local->format('Y-m-d');
+        $isoWeekday = (int)$local->format('N');
+
+        $specialForDate = $location->getSpecialHours()?->getForDate($localDate) ?? [];
+
+        if ($specialForDate !== []) {
+            foreach ($specialForDate as $special) {
+                if ($special->isClosed()) {
+                    return [];
+                }
+            }
+
+            $ranges = [];
+
+            foreach ($specialForDate as $special) {
+                $range = $this->buildRange($localDate, $special->getOpenTime(), $special->getCloseTime(), $timezone);
+
+                if ($range !== null) {
+                    $ranges[] = $range;
+                }
+            }
+
+            return $ranges;
+        }
+
+        $ranges = [];
+
+        foreach ($location->getOpeningHoursSchedule()?->getForWeekday($isoWeekday) ?? [] as $interval) {
+            $range = $this->buildRange($localDate, $interval->getOpenTime(), $interval->getCloseTime(), $timezone);
+
+            if ($range !== null) {
+                $ranges[] = $range;
+            }
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * @return array{start: \DateTimeImmutable, end: \DateTimeImmutable}|null
+     */
+    private function buildRange(string $localDate, ?string $open, ?string $close, \DateTimeZone $timezone): ?array
+    {
+        if ($open === null || $close === null || $this->toMinutes($open) === null || $this->toMinutes($close) === null) {
+            return null;
+        }
+
+        $start = new \DateTimeImmutable($localDate . ' ' . $open, $timezone);
+        $end = new \DateTimeImmutable($localDate . ' ' . $close, $timezone);
+
+        // Overnight interval (close <= open) ends on the following day.
+        if ($end <= $start) {
+            $end = $end->modify('+1 day');
+        }
+
+        return ['start' => $start, 'end' => $end];
+    }
+
+    /**
      * Filter loaded locations down to those open at the reference instant.
      *
      * @param iterable<PickupLocationEntity> $locations

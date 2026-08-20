@@ -2,13 +2,15 @@
   "checkout": {
     "kommandhub-click-and-pick": {
       "pickupLocationRequired": "Veuillez sélectionner un lieu de retrait valide avant de passer votre commande.",
-      "unsupportedDeliveryMethod": "Le mode de livraison sélectionné « \"%deliveryMethodName%\" » n'est pas pris en charge pour le mode de paiement choisi. Veuillez sélectionner un autre mode de livraison."
+      "unsupportedDeliveryMethod": "Le mode de livraison sélectionné « \"%deliveryMethodName%\" » n'est pas pris en charge pour le mode de paiement choisi. Veuillez sélectionner un autre mode de livraison.",
+      "invalidPickupTime": "L'heure de retrait sélectionnée est en dehors des heures d'ouverture du lieu de retrait. Veuillez choisir une heure disponible."
     }
   },
   "error": {
     "kommandhub-click-and-pick": {
       "pickupLocationRequired": "Veuillez sélectionner un lieu de retrait valide avant de passer votre commande.",
-      "unsupportedDeliveryMethod": "Le mode de livraison sélectionné « \"%deliveryMethodName%\" » n'est pas pris en charge pour le mode de paiement choisi. Veuillez sélectionner un autre mode de livraison."
+      "unsupportedDeliveryMethod": "Le mode de livraison sélectionné « \"%deliveryMethodName%\" » n'est pas pris en charge pour le mode de paiement choisi. Veuillez sélectionner un autre mode de livraison.",
+      "invalidPickupTime": "L'heure de retrait sélectionnée est en dehors des heures d'ouverture du lieu de retrait. Veuillez choisir une heure disponible."
     }
   },
   "general": {
@@ -29,7 +31,17 @@
         "openDays": "Jours d'ouverture",
         "openHours": "Heures d'ouverture",
         "phone": "Téléphone",
-        "email": "E-mail"
+        "email": "E-mail",
+        "pickupTime": "Heure de retrait",
+        "pickupComment": "Remarques"
+      },
+      "pickupTimeField": {
+        "dateLabel": "Date de retrait",
+        "timeLabel": "Heure de retrait",
+        "placeholder": "Sélectionner une heure",
+        "noSlots": "Aucune heure de retrait disponible à cette date.",
+        "commentLabel": "Remarques pour le lieu de retrait",
+        "commentPlaceholder": "Instructions facultatives (par ex. heure d'arrivée, détails de la commande)"
       }
     }
   }

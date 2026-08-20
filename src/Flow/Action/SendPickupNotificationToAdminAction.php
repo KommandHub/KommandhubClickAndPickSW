@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Flow\Action;
 
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
+use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use Kommandhub\ClickAndPickSW\Migration\Migration1760113852PickupReadyMailTemplate;
 use Psr\Log\LoggerInterface;
@@ -70,6 +72,17 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
             return;
         }
 
+        // The order pickup record (chosen time + instructions) is optional flow
+        // data — present on the plugin's pickup triggers, absent if some other
+        // pickup-location-aware event reuses this action.
+        $pickupOrderLocation = $flow->hasData(OrderPickupLocationAware::ORDER_PICKUP_LOCATION)
+            ? $flow->getData(OrderPickupLocationAware::ORDER_PICKUP_LOCATION)
+            : null;
+
+        if (!$pickupOrderLocation instanceof OrderPickupLocationEntity) {
+            $pickupOrderLocation = null;
+        }
+
         $recipientEmail = trim($pickupLocation->getEmail());
 
         if ($recipientEmail === '' || !$this->isValidEmail($recipientEmail)) {
@@ -97,7 +110,7 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
 
             // A missing/invalid configured sender is not fatal: omit it and let
             // the mail service resolve the sales channel's own sender address.
-            $data = $this->buildMailData($template, $order, $pickupLocation, $recipientEmail, $this->resolveSenderEmail($order), $context);
+            $data = $this->buildMailData($template, $order, $pickupLocation, $pickupOrderLocation, $recipientEmail, $this->resolveSenderEmail($order), $context);
             /** @var array<string, mixed> $templateData */
             $templateData = $data['mailTemplateData'];
             $this->mailService->send($data, $context, $templateData);
@@ -136,6 +149,7 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
         MailTemplateEntity $template,
         OrderEntity $order,
         PickupLocationEntity $pickupLocation,
+        ?OrderPickupLocationEntity $pickupOrderLocation,
         string $recipientEmail,
         ?string $senderEmail,
         Context $context
@@ -151,6 +165,7 @@ class SendPickupNotificationToAdminAction extends FlowAction implements Delayabl
                 'order' => $order,
                 'customer' => $order->getOrderCustomer(),
                 'pickupLocation' => $pickupLocation,
+                'pickupOrderLocation' => $pickupOrderLocation,
             ],
             'contentHtml' => $template->getContentHtml(),
             'contentPlain' => $template->getContentPlain(),
