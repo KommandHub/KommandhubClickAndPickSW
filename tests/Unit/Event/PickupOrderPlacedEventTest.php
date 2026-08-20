@@ -67,6 +67,24 @@ class PickupOrderPlacedEventTest extends TestCase
         static::assertSame($mailStruct, $event->getMailStruct());
     }
 
+    public function testMailStructIsEmptyWhenCustomerEmailIsMissing(): void
+    {
+        $order = new OrderEntity();
+        $order->setId('0123456789abcdef0123456789abcdef');
+
+        $location = new PickupLocationEntity();
+        $location->setId('fedcba9876543210fedcba9876543210');
+
+        $event = new PickupOrderPlacedEvent(
+            $this->salesChannelContext(),
+            $order,
+            $location,
+            $this->pickupRecord($location)
+        );
+
+        static::assertSame([], $event->getMailStruct()->getRecipients());
+    }
+
     public function testUsesProvidedMailRecipientStruct(): void
     {
         $mailStruct = new MailRecipientStruct(['provided@shop.test' => 'Provided Recipient']);

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Kommandhub\ClickAndPickSW;
 
 use Doctrine\DBAL\Connection;
+use Kommandhub\ClickAndPickSW\Entity\OrderPickupLocation\OrderPickupLocationDefinition;
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationOpeningHour\PickupLocationOpeningHourDefinition;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSalesChannelMapping\PickupLocationSalesChannelMappingDefinition;
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSpecialHour\PickupLocationSpecialHourDefinition;
 use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationDefinition;
 use Kommandhub\ClickAndPickSW\Installer\PaymentMethodInstaller;
 use Kommandhub\ClickAndPickSW\Installer\ShippingMethodInstaller;
@@ -78,7 +81,13 @@ class KommandhubClickAndPickSW extends Plugin
             return;
         }
 
+        // Drop child tables before the parent so foreign-key constraints don't
+        // block the removal. The order pickup record, schedule aggregates and the
+        // sales-channel mapping all reference kommandhub_pickup_location.
         $tables = [
+            OrderPickupLocationDefinition::ENTITY_NAME,
+            PickupLocationOpeningHourDefinition::ENTITY_NAME,
+            PickupLocationSpecialHourDefinition::ENTITY_NAME,
             PickupLocationSalesChannelMappingDefinition::ENTITY_NAME,
             PickupLocationDefinition::ENTITY_NAME,
         ];

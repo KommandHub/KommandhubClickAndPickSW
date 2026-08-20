@@ -11,6 +11,7 @@ use Kommandhub\ClickAndPickSW\Entity\PickupLocation\PickupLocationEntity;
 use Kommandhub\ClickAndPickSW\Flow\Aware\OrderPickupLocationAware;
 use Kommandhub\ClickAndPickSW\Flow\Aware\PickupLocationAware;
 use Shopware\Core\Checkout\Order\OrderDefinition;
+use Shopware\Core\Checkout\Order\Aggregate\OrderCustomer\OrderCustomerEntity;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Checkout\Order\OrderException;
 use Shopware\Core\Framework\Context;
@@ -112,13 +113,22 @@ class PickupOrderReadyEvent extends Event implements SalesChannelAware, OrderAwa
     public function getMailStruct(): MailRecipientStruct
     {
         if ($this->mailRecipientStruct === null) {
-            $orderCustomer = $this->order->getOrderCustomer();
-
-            $this->mailRecipientStruct = new MailRecipientStruct([
-                $orderCustomer?->getEmail() => $orderCustomer?->getFirstName() . ' ' . $orderCustomer?->getLastName(),
-            ]);
+            $this->mailRecipientStruct = $this->buildMailRecipient($this->order->getOrderCustomer());
         }
 
         return $this->mailRecipientStruct;
+    }
+
+    private function buildMailRecipient(?OrderCustomerEntity $customer): MailRecipientStruct
+    {
+        $email = $customer?->getEmail();
+
+        if ($customer === null || $email === null || $email === '') {
+            return new MailRecipientStruct([]);
+        }
+
+        return new MailRecipientStruct([
+            $email => trim($customer->getFirstName() . ' ' . $customer->getLastName()),
+        ]);
     }
 }

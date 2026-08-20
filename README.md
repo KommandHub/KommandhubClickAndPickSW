@@ -11,26 +11,41 @@
 ### Storefront
 - Shows a pickup location selector during checkout for the plugin shipping method.
 - Filters selectable locations by active status and sales channel assignment.
-- Shows location details (address, open days/hours, optional contact details).
-- Persists selected pickup location in the sales channel context.
+- Shows location details (address, opening schedule, optional contact details).
+- Lets the customer choose a pickup date and time (limited to the location's
+  timezone-aware opening schedule) and add optional pickup instructions.
+- Persists the pickup selection in the sales channel context and re-shows it on
+  the confirmation/finish page.
 
 ### Administration
 - Adds a `Pickup Locations` module under **Content**.
 - Lets you create/edit pickup locations and assign them to sales channels.
-- Supports open days (`openDays`), opening/closing hours, contact details, geo fields, and active state.
+- Configure a per-location timezone, a weekly opening schedule and special-date
+  overrides (holidays/exceptions), plus contact details, geo fields and active state.
 
 ### Checkout and Order Processing
-- Creates a `Pay on pickup` payment method on install.
+- Creates a `Pay on pickup` payment method on activate.
 - Creates a `Self pick-up` shipping method via migration.
 - Restricts `Pay on pickup` to the plugin shipping method.
-- Saves selected pickup location ID into order custom fields.
+- Validates the pickup selection server-side (cart validator): blocks checkout
+  when a location is missing or the chosen time is outside the schedule.
+- Persists the pickup location, time and instructions on the order via the
+  `kommandhub_order_pickup_location` entity (a OneToOne order extension).
 - Dispatches `pickup.order.placed` for pickup orders.
+
+### Administration order view
+- Adds a read-only `Pickup information` tab on the order detail page showing the
+  selected location, address/contact, chosen date/time and instructions. Handles a
+  since-deleted pickup location gracefully (keeps the historical pickup data).
 
 ### Order State and Notifications
 - Adds delivery state `ready_for_pickup` and related transitions.
-- Creates mail templates and flow entries for:
+- Creates mail templates and Flow Builder entries for:
   - customer pickup-ready mail,
   - admin pickup-order-placed notification.
+- Exposes `pickup.order.placed` and `pickup.order.ready` Flow Builder triggers, and
+  `Send pickup notification to admin` (mail) and `Send pickup SMS to location`
+  actions. The SMS action is an optional soft dependency on KommandhubSmsSW.
 
 ## Requirements
 
@@ -105,8 +120,7 @@ Recommended minimum fields:
 Useful optional fields:
 - Phone number
 - Additional address lines
-- Open days (array of weekday keys, e.g. `monday`, `tuesday`)
-- Opening/closing hours
+- Timezone and the opening schedule (weekly hours + special-date overrides)
 - Latitude/longitude
 - Location code
 
@@ -119,9 +133,10 @@ A pickup location is selectable in checkout only when:
 
 ### Customer flow
 1. Customer selects `Self pick-up` shipping method in checkout.
-2. Customer selects a pickup location.
+2. Customer selects a pickup location, an available pickup time and optional notes.
 3. Customer can use `Pay on pickup` (enforced to pickup shipping context).
-4. Order is placed with selected pickup location persisted in custom fields.
+4. Order is placed; the pickup selection is stored on the order via the
+   `kommandhub_order_pickup_location` entity.
 
 ### Internal fulfillment flow
 1. Process order as usual.
@@ -130,20 +145,24 @@ A pickup location is selectable in checkout only when:
 
 ## Data and Integration Notes
 
-### Custom entity
-Main entity: `kommandhub_pickup_location`
-- includes address/contact/opening metadata,
-- includes `open_days` JSON field,
-- many-to-many mapping to `sales_channel`.
+### Entities
+- `kommandhub_pickup_location` — the location: address/contact/geo metadata and a
+  many-to-many mapping to `sales_channel`, with normalized opening-hour and
+  special-date (override) aggregates and an IANA timezone.
+- `kommandhub_order_pickup_location` — one row per pickup order (a OneToOne order
+  extension): `pickup_location_id`, chosen `pickup_time` and `comment`. This is the
+  single source of truth for an order's pickup data. Deleting a location nulls the
+  reference (`ON DELETE SET NULL`) and keeps the historical order data.
 
-### Order custom field
-The selected location ID is saved to order custom fields using key:
-`kommandhub_pickup_location_id`
+> The `opening_hours`/`closing_hours`/`open_days` fields on `kommandhub_pickup_location`
+> are deprecated in favour of the opening-hour aggregates and kept only for
+> backfill/compatibility; they may be removed before 1.0.0.
 
 ### Storefront routes
 Controller: `SalesChannelPickupLocationController`
 - list route: `frontend.kommandhub.sales-channel.pickup-locations.index`
 - details route: `frontend.kommandhub.sales-channel.pickup-locations.show`
+- slots route: `frontend.kommandhub.sales-channel.pickup-locations.slots`
 
 ## Development Guide
 
@@ -208,12 +227,17 @@ image picks up the bundled `shopware-cli`). Run `make help` for the full list.
 
 ## Security and Data Handling
 
-- Uninstall behavior keeps payment method record but deactivates it to avoid historical order integrity issues.
-- If uninstall is executed without keeping user data, pickup location tables are dropped.
+- Uninstall keeps (but deactivates) the payment and shipping methods, so historical
+  orders that reference them stay intact.
+- Uninstalling with "keep user data" leaves all plugin tables in place. Without it,
+  the plugin tables (`kommandhub_order_pickup_location`, the opening-hour and
+  special-hour aggregates, the sales-channel mapping and `kommandhub_pickup_location`)
+  are dropped child-first so foreign keys don't block removal. Orders themselves are
+  never deleted.
 
 ## Version and Compatibility
 
-- Plugin package version: `1.0.0`
+- Plugin package version: `0.9.0` (first public, pre-1.0 release)
 - Target Shopware core: `~6.7.0`
 - License: Proprietary
 
