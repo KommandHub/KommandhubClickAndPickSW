@@ -303,10 +303,50 @@ The admin-notify action reads the sender email from core system config
 
 - `shopware/core` and `shopware/storefront` `~6.7.0`.
 - PHP 8.2+ (CI runs 8.2; the dev Docker image is `dockware/shopware:6.7.8.0`).
-- Install/activate lifecycle (`KommandhubClickAndPickSW`):
-  - `install` / `update` → run the payment + shipping installers (idempotent).
-  - `activate` / `deactivate` → activate/deactivate the payment + shipping methods.
-  - Migrations create all tables/state/mail/flow entries.
+
+### Composer
+
+Package: `kommandhub/click-and-pick-sw`. It is **proprietary and not on public
+Packagist**, so first make it resolvable — add Kommandhub's private Composer
+registry, or the Git repository as a VCS source, to your project's
+`composer.json`:
+
+```jsonc
+"repositories": [
+  { "type": "vcs", "url": "git@github.com:KommandHub/KommandhubClickAndPickSW.git" }
+]
+```
+
+Then require and enable it from the Shopware project root:
+
+```bash
+composer require kommandhub/click-and-pick-sw
+bin/console plugin:refresh
+bin/console plugin:install --activate KommandhubClickAndPickSW
+bin/console cache:clear
+```
+
+Update an installed copy:
+
+```bash
+composer update kommandhub/click-and-pick-sw
+bin/console plugin:refresh
+bin/console plugin:update KommandhubClickAndPickSW
+bin/console cache:clear
+```
+
+Without registry/VCS access, install from a release archive by unpacking it into
+`custom/plugins/KommandhubClickAndPickSW`, then run the same `plugin:refresh` /
+`plugin:install --activate` commands. Rebuild assets afterwards when needed
+(`bin/build-administration.sh && bin/build-storefront.sh`).
+
+### Lifecycle
+
+Install/activate lifecycle (`KommandhubClickAndPickSW`):
+
+- `install` / `update` → run the payment + shipping installers (idempotent).
+- `activate` / `deactivate` → activate/deactivate the payment + shipping methods.
+- Migrations create all tables/state/mail/flow entries.
 
 ## 14. Migrations, update & uninstall
 
