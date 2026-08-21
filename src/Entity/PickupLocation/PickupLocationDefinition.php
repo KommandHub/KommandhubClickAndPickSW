@@ -15,7 +15,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\CascadeDelete;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
-use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\OneToManyAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StringField;
@@ -60,11 +59,6 @@ class PickupLocationDefinition extends EntityDefinition
             // IANA timezone (e.g. "Europe/Berlin"). Availability is evaluated in
             // this zone; opening/closing times are local wall-clock, never UTC.
             (new StringField('timezone', 'timezone'))->addFlags(new ApiAware()),
-            // @deprecated superseded by the openingHours/specialHours associations.
-            // Kept for one release for backfill + backward compatibility.
-            (new StringField('opening_hours', 'openingHours'))->addFlags(new ApiAware()),
-            (new StringField('closing_hours', 'closingHours'))->addFlags(new ApiAware()),
-            (new JsonField('open_days', 'openDays'))->addFlags(new ApiAware()),
             (new StringField('latitude', 'latitude'))->addFlags(new ApiAware()),
             (new StringField('longitude', 'longitude'))->addFlags(new ApiAware()),
             (new StringField('location_code', 'locationCode'))->addFlags(new ApiAware()),

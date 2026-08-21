@@ -169,11 +169,5 @@ export default {
                 this.pickupLocation.salesChannels = salesChannels;
             }
         },
-
-        onChangeOpenDays(openDays) {
-            if (this.pickupLocation) {
-                this.pickupLocation.openDays = openDays;
-            }
-        }
     },
 }

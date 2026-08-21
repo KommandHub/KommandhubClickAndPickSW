@@ -28,15 +28,6 @@
                 {% endblock %}
 
                 {% if context.extensions.pickupLocation.id is not null %}
-                {% set salesChannelPickupLocationInfoOptions = {
-                    url: path("frontend.kommandhub.sales-channel.pickup-locations.show", { salesChannelId: context.salesChannel.id, locationId: context.extensions.pickupLocation.id }),
-                }%}
-
-                {% block component_shipping_method_label_kommandhub_self_pickup_location_field_info %}
-                    {#<div data-sales-channel-pickup-location-info="true"
-                         data-sales-channel-pickup-location-info-options="{{ salesChannelPickupLocationInfoOptions|json_encode }}"></div>#}
-                {% endblock %}
-
                 {% block component_shipping_method_label_kommandhub_self_pickup_time %}
                     {% set selectedPickupTime = context.extensions.pickupLocation.pickupTime %}
                     {% set selectedPickupComment = context.extensions.pickupLocation.pickupComment %}

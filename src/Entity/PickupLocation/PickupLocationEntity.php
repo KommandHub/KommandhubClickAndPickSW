@@ -24,16 +24,6 @@ class PickupLocationEntity extends Entity
     protected string $postalCode;
     protected ?string $timeFormat = '24h';
     protected ?string $timezone = null;
-
-    /** @deprecated use the openingHours association */
-    protected ?string $openingHours = null;
-
-    /** @deprecated use the openingHours association */
-    protected ?string $closingHours = null;
-
-    /** @deprecated use the openingHours association */
-    protected ?array $openDays = null;
-
     protected ?string $latitude = null;
     protected ?string $longitude = null;
     protected bool $active;
@@ -142,36 +132,6 @@ class PickupLocationEntity extends Entity
     public function setTimeFormat(?string $timeFormat): void
     {
         $this->timeFormat = $timeFormat ?? '24h';
-    }
-
-    public function getClosingHours(): ?string
-    {
-        return $this->closingHours;
-    }
-
-    public function setClosingHours(?string $closingHours): void
-    {
-        $this->closingHours = $closingHours;
-    }
-
-    public function getOpeningHours(): ?string
-    {
-        return $this->openingHours;
-    }
-
-    public function setOpeningHours(?string $openingHours): void
-    {
-        $this->openingHours = $openingHours;
-    }
-
-    public function getOpenDays(): ?array
-    {
-        return $this->openDays;
-    }
-
-    public function setOpenDays(?array $openDays): void
-    {
-        $this->openDays = $openDays;
     }
 
     public function getPostalCode(): string

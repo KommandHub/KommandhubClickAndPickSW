@@ -100,58 +100,6 @@ class SalesChannelPickupLocationControllerTest extends TestCase
         static::assertSame([$open], $this->controller->lastParameters['locations']);
     }
 
-    public function testShowLoadsScheduleAssociationsForSingleLocation(): void
-    {
-        $location = new PickupLocationEntity();
-        $location->setId('11111111111111111111111111111111');
-
-        $searchResult = $this->createMock(EntitySearchResult::class);
-        $searchResult->method('first')->willReturn($location);
-        $context = $this->salesChannelContext();
-
-        $this->repository
-            ->expects(static::once())
-            ->method('search')
-            ->with(
-                static::callback(function (Criteria $criteria): bool {
-                    $associations = $criteria->getAssociations();
-
-                    return $criteria->getIds() === ['location-id']
-                        && $criteria->getLimit() === 1
-                        && array_key_exists('openingHoursSchedule', $associations)
-                        && array_key_exists('specialHours', $associations);
-                }),
-                $context->getContext()
-            )
-            ->willReturn($searchResult);
-
-        $response = $this->controller->show('location-id', 'sales-channel-id', $context);
-
-        static::assertSame(200, $response->getStatusCode());
-        static::assertSame(
-            '@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-location-field-info.html.twig',
-            $this->controller->lastTemplate
-        );
-        static::assertSame($location, $this->controller->lastParameters['location']);
-    }
-
-    public function testShowRendersNullWhenLocationCannotBeFound(): void
-    {
-        $searchResult = $this->createMock(EntitySearchResult::class);
-        $searchResult->method('first')->willReturn(null);
-        $context = $this->salesChannelContext();
-
-        $this->repository
-            ->expects(static::once())
-            ->method('search')
-            ->willReturn($searchResult);
-
-        $response = $this->controller->show('missing-location-id', 'sales-channel-id', $context);
-
-        static::assertSame(200, $response->getStatusCode());
-        static::assertNull($this->controller->lastParameters['location']);
-    }
-
     public function testSlotsRendersSlotsForValidDate(): void
     {
         $location = new PickupLocationEntity();

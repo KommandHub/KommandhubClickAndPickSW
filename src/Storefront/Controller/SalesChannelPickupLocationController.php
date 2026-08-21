@@ -69,31 +69,6 @@ class SalesChannelPickupLocationController extends StorefrontController
     }
 
     #[Route(
-        path: '/kommandhub/sales-channel/{salesChannelId}/location/{locationId}',
-        name: 'frontend.kommandhub.sales-channel.pickup-locations.show',
-        defaults: ['XmlHttpRequest' => 'true'],
-        methods: ['GET']
-    )]
-    public function show(string $locationId, string $salesChannelId, SalesChannelContext $salesChannelContext): Response
-    {
-        $criteria = new Criteria([$locationId]);
-        $criteria->addFilter(new EqualsFilter('salesChannels.id', $salesChannelId));
-        $criteria->addAssociation('openingHoursSchedule');
-        $criteria->addAssociation('specialHours');
-        $criteria->setLimit(1);
-
-        $location = $this->kommandhubPickupLocationRepository->search(
-            $criteria,
-            $salesChannelContext->getContext()
-        )->first();
-
-        return $this->renderStorefront(
-            '@KommandhubClickAndPickSW/storefront/component/shipping/custom/pickup-location-field-info.html.twig',
-            ['location' => $location]
-        );
-    }
-
-    #[Route(
         path: '/kommandhub/sales-channel/{salesChannelId}/location/{locationId}/slots',
         name: 'frontend.kommandhub.sales-channel.pickup-locations.slots',
         defaults: ['XmlHttpRequest' => 'true'],

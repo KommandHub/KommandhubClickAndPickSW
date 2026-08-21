@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://kommandhub.com" target="_blank">
+    <img src="src/Resources/config/kommandhub.png" alt="Kommandhub Logo">
+  </a>
+</p>
+
 # Click and Pick plugin for Shopware 6
 
 `KommandhubClickAndPickSW` adds a complete click-and-collect flow to Shopware:
@@ -154,14 +160,9 @@ A pickup location is selectable in checkout only when:
   single source of truth for an order's pickup data. Deleting a location nulls the
   reference (`ON DELETE SET NULL`) and keeps the historical order data.
 
-> The `opening_hours`/`closing_hours`/`open_days` fields on `kommandhub_pickup_location`
-> are deprecated in favour of the opening-hour aggregates and kept only for
-> backfill/compatibility; they may be removed before 1.0.0.
-
 ### Storefront routes
 Controller: `SalesChannelPickupLocationController`
 - list route: `frontend.kommandhub.sales-channel.pickup-locations.index`
-- details route: `frontend.kommandhub.sales-channel.pickup-locations.show`
 - slots route: `frontend.kommandhub.sales-channel.pickup-locations.slots`
 
 ## Development Guide
