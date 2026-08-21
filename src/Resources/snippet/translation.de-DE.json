@@ -1,12 +1,16 @@
 {
   "checkout": {
     "kommandhub-click-and-pick": {
-      "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus."
+      "pickupLocationRequired": "Bitte wählen Sie einen gültigen Abholort aus, bevor Sie Ihre Bestellung aufgeben.",
+      "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus.",
+      "invalidPickupTime": "Die gewählte Abholzeit liegt außerhalb der Öffnungszeiten des Abholorts. Bitte wählen Sie eine verfügbare Zeit."
     }
   },
   "error": {
     "kommandhub-click-and-pick": {
-      "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus."
+      "pickupLocationRequired": "Bitte wählen Sie einen gültigen Abholort aus, bevor Sie Ihre Bestellung aufgeben.",
+      "unsupportedDeliveryMethod": "Die ausgewählte Versandart \"%deliveryMethodName%\" wird für die gewählte Zahlungsmethode nicht unterstützt. Bitte wählen Sie eine andere Versandart aus.",
+      "invalidPickupTime": "Die gewählte Abholzeit liegt außerhalb der Öffnungszeiten des Abholorts. Bitte wählen Sie eine verfügbare Zeit."
     }
   },
   "general": {
@@ -21,12 +25,23 @@
         "sunday": "Sonntag"
       },
       "locationInfoFields": {
+        "closed": "Geschlossen",
         "storeName": "Abholort",
         "address": "Adresse",
         "openDays": "Öffnungstage",
         "openHours": "Öffnungszeiten",
         "phone": "Telefon",
-        "email": "E-Mail"
+        "email": "E-Mail",
+        "pickupTime": "Abholzeit",
+        "pickupComment": "Anmerkungen"
+      },
+      "pickupTimeField": {
+        "dateLabel": "Abholdatum",
+        "timeLabel": "Abholzeit",
+        "placeholder": "Zeit auswählen",
+        "noSlots": "An diesem Datum sind keine Abholzeiten verfügbar.",
+        "commentLabel": "Anmerkungen für den Abholort",
+        "commentPlaceholder": "Optionale Hinweise (z. B. Ankunftszeit, Bestelldetails)"
       }
     }
   }

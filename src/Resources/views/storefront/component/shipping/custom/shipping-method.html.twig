@@ -28,13 +28,47 @@
                 {% endblock %}
 
                 {% if context.extensions.pickupLocation.id is not null %}
-                {% set salesChannelPickupLocationInfoOptions = {
-                    url: path("frontend.kommandhub.sales-channel.pickup-locations.show", { salesChannelId: context.salesChannel.id, locationId: context.extensions.pickupLocation.id }),
-                }%}
-
-                {% block component_shipping_method_label_kommandhub_self_pickup_location_field_info %}
-                    <div data-sales-channel-pickup-location-info="true"
-                         data-sales-channel-pickup-location-info-options="{{ salesChannelPickupLocationInfoOptions|json_encode }}"></div>
+                {% block component_shipping_method_label_kommandhub_self_pickup_time %}
+                    {% set selectedPickupTime = context.extensions.pickupLocation.pickupTime %}
+                    {% set selectedPickupComment = context.extensions.pickupLocation.pickupComment %}
+                    {% set salesChannelPickupTimeOptions = {
+                        url: path("frontend.kommandhub.sales-channel.pickup-locations.slots", { salesChannelId: context.salesChannel.id, locationId: context.extensions.pickupLocation.id }),
+                        selectedPickupTime: selectedPickupTime
+                    } %}
+                    <div class="mt-3"
+                         data-sales-channel-pickup-time="true"
+                         data-sales-channel-pickup-time-options="{{ salesChannelPickupTimeOptions|json_encode }}">
+                        {% block component_shipping_method_label_kommandhub_self_pickup_time_date %}
+                            <label for="pickup-time-date-field-id">{{ "general.kommandhub-click-and-pick.pickupTimeField.dateLabel" | trans }}</label>
+                            {# No name → helper only; drives the slots fetch and must not auto-submit the shipping form. #}
+                            <input type="date"
+                                   id="pickup-time-date-field-id"
+                                   data-pickup-time-date
+                                   class="form-control shipping-method-input">
+                        {% endblock %}
+                        {% block component_shipping_method_label_kommandhub_self_pickup_time_select %}
+                            <label for="pickup-time-field-id" class="mt-2">{{ "general.kommandhub-click-and-pick.pickupTimeField.timeLabel" | trans }}</label>
+                            <select id="pickup-time-field-id"
+                                    name="pickupTime"
+                                    data-pickup-time-select
+                                    class="form-control shipping-method-input">
+                                {% if selectedPickupTime %}
+                                    <option value="{{ selectedPickupTime }}" selected>{{ selectedPickupTime|date('H:i', false) }}</option>
+                                {% else %}
+                                    <option value="">{{ "general.kommandhub-click-and-pick.pickupTimeField.placeholder" | trans }}</option>
+                                {% endif %}
+                            </select>
+                        {% endblock %}
+                        {% block component_shipping_method_label_kommandhub_self_pickup_time_comment %}
+                            <label for="pickup-comment-field-id" class="mt-2">{{ "general.kommandhub-click-and-pick.pickupTimeField.commentLabel" | trans }}</label>
+                            <textarea id="pickup-comment-field-id"
+                                      name="pickupComment"
+                                      rows="2"
+                                      maxlength="500"
+                                      placeholder="{{ "general.kommandhub-click-and-pick.pickupTimeField.commentPlaceholder" | trans }}"
+                                      class="form-control shipping-method-input">{{ selectedPickupComment }}</textarea>
+                        {% endblock %}
+                    </div>
                 {% endblock %}
                 {% endif %}
             </div>

@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Kommandhub\ClickAndPickSW\Entity\PickupLocation;
 
-use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSalesChannelMapping\PickupLocationSalesChannelMappingCollection;
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationOpeningHour\PickupLocationOpeningHourCollection;
+use Kommandhub\ClickAndPickSW\Entity\PickupLocation\Aggregate\PickupLocationSpecialHour\PickupLocationSpecialHourCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityIdTrait;
 use Shopware\Core\System\SalesChannel\SalesChannelCollection;
@@ -21,9 +22,8 @@ class PickupLocationEntity extends Entity
     protected ?string $additionalAddressLine2 = null;
     protected string $city;
     protected string $postalCode;
-    protected ?string $openingHours = null;
-    protected ?string $closingHours = null;
-    protected ?array $openDays = null;
+    protected ?string $timeFormat = '24h';
+    protected ?string $timezone = null;
     protected ?string $latitude = null;
     protected ?string $longitude = null;
     protected bool $active;
@@ -31,6 +31,38 @@ class PickupLocationEntity extends Entity
     protected ?\DateTimeInterface $createdAt = null;
     protected ?\DateTimeInterface $updatedAt = null;
     protected ?SalesChannelCollection $salesChannels = null;
+    protected ?PickupLocationOpeningHourCollection $openingHoursSchedule = null;
+    protected ?PickupLocationSpecialHourCollection $specialHours = null;
+
+    public function getTimezone(): ?string
+    {
+        return $this->timezone;
+    }
+
+    public function setTimezone(?string $timezone): void
+    {
+        $this->timezone = $timezone;
+    }
+
+    public function getOpeningHoursSchedule(): ?PickupLocationOpeningHourCollection
+    {
+        return $this->openingHoursSchedule;
+    }
+
+    public function setOpeningHoursSchedule(?PickupLocationOpeningHourCollection $openingHoursSchedule): void
+    {
+        $this->openingHoursSchedule = $openingHoursSchedule;
+    }
+
+    public function getSpecialHours(): ?PickupLocationSpecialHourCollection
+    {
+        return $this->specialHours;
+    }
+
+    public function setSpecialHours(?PickupLocationSpecialHourCollection $specialHours): void
+    {
+        $this->specialHours = $specialHours;
+    }
 
     public function getSalesChannels(): ?SalesChannelCollection
     {
@@ -92,34 +124,14 @@ class PickupLocationEntity extends Entity
         $this->latitude = $latitude;
     }
 
-    public function getClosingHours(): ?string
+    public function getTimeFormat(): ?string
     {
-        return $this->closingHours;
+        return $this->timeFormat;
     }
 
-    public function setClosingHours(?string $closingHours): void
+    public function setTimeFormat(?string $timeFormat): void
     {
-        $this->closingHours = $closingHours;
-    }
-
-    public function getOpeningHours(): ?string
-    {
-        return $this->openingHours;
-    }
-
-    public function setOpeningHours(?string $openingHours): void
-    {
-        $this->openingHours = $openingHours;
-    }
-
-    public function getOpenDays(): ?array
-    {
-        return $this->openDays;
-    }
-
-    public function setOpenDays(?array $openDays): void
-    {
-        $this->openDays = $openDays;
+        $this->timeFormat = $timeFormat ?? '24h';
     }
 
     public function getPostalCode(): string

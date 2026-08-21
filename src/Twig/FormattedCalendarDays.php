@@ -70,7 +70,11 @@ class FormattedCalendarDays extends AbstractExtension
         $uniqueDays = [];
 
         foreach ($calendarDays as $day) {
-            $normalizedDay = strtolower(trim((string) $day));
+            if (!\is_scalar($day) && !$day instanceof \Stringable) {
+                continue;
+            }
+
+            $normalizedDay = strtolower(trim((string)$day));
 
             if ($normalizedDay === '' || !isset(self::WEEKDAY_INDEX[$normalizedDay])) {
                 continue;
@@ -104,5 +108,4 @@ class FormattedCalendarDays extends AbstractExtension
 
         return true;
     }
-
 }

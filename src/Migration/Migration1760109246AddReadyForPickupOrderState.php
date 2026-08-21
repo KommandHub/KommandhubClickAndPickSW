@@ -116,7 +116,7 @@ class Migration1760109246AddReadyForPickupOrderState extends MigrationStep
                 $connection->insert('state_machine_state_translation', [
                     'state_machine_state_id' => $stateId,
                     'language_id' => $defaultLangId,
-                    'name' => 'Ready for pickup',
+                    'name' => 'Ready',
                     'created_at' => $createdAt
                 ]);
             }
@@ -128,7 +128,7 @@ class Migration1760109246AddReadyForPickupOrderState extends MigrationStep
                 $connection->insert('state_machine_state_translation', [
                     'state_machine_state_id' => $stateId,
                     'language_id' => $germanId,
-                    'name' => 'Bereit zur Abholung',
+                    'name' => 'Bereit',
                     'created_at' => $createdAt
                 ]);
             }
@@ -205,10 +205,10 @@ class Migration1760109246AddReadyForPickupOrderState extends MigrationStep
         string $toStateId
     ): bool {
         $result = $connection->fetchOne(
-            'SELECT 1 FROM state_machine_transition WHERE 
-             state_machine_id = :state_machine_id AND 
-             action_name = :action_name AND 
-             from_state_id = :from_state_id AND 
+            'SELECT 1 FROM state_machine_transition WHERE
+             state_machine_id = :state_machine_id AND
+             action_name = :action_name AND
+             from_state_id = :from_state_id AND
              to_state_id = :to_state_id',
             [
                 'state_machine_id' => $stateMachineId,
@@ -226,9 +226,15 @@ class Migration1760109246AddReadyForPickupOrderState extends MigrationStep
      */
     private function fetchOrderDeliveryStateId(Connection $connection): string
     {
-        return $connection->fetchOne('SELECT id FROM state_machine WHERE technical_name = :technical_name', [
+        $stateMachineId = $connection->fetchOne('SELECT id FROM state_machine WHERE technical_name = :technical_name', [
             'technical_name' => 'order_delivery.state',
         ]);
+
+        if (!\is_string($stateMachineId) || $stateMachineId === '') {
+            throw new \RuntimeException('Order delivery state machine id not found.');
+        }
+
+        return $stateMachineId;
     }
 
     /**
@@ -250,7 +256,11 @@ class Migration1760109246AddReadyForPickupOrderState extends MigrationStep
             return null;
         }
 
-        return (string) $stateId;
+        if (!\is_string($stateId) || $stateId === '') {
+            throw new \RuntimeException(\sprintf('Invalid state id for technical name "%s".', $technicalName));
+        }
+
+        return $stateId;
     }
 
     /**
@@ -270,6 +280,10 @@ class Migration1760109246AddReadyForPickupOrderState extends MigrationStep
             return Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM);
         }
 
-        return (string) $langId;
+        if (!\is_string($langId)) {
+            throw new \RuntimeException(\sprintf('Invalid language id for code "%s".', $code));
+        }
+
+        return $langId;
     }
 }

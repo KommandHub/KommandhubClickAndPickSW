@@ -7,7 +7,6 @@ use Shopware\Core\TestBootstrapper;
 $loader = (new TestBootstrapper())
     ->addCallingPlugin()
     ->addActivePlugins('KommandhubClickAndPickSW')
-    ->setForceInstallPlugins(true)
     ->bootstrap()
     ->getClassLoader();
 

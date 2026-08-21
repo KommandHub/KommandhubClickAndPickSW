@@ -1,23 +1,43 @@
 {
   "main.js": {
-    "file": "assets/kommandhub-click-and-pick-s-w-I-WU7c7m.js",
+    "file": "assets/kommandhub-click-and-pick-s-w-DgfmPA6W.js",
     "name": "kommandhub-click-and-pick-s-w",
     "src": "main.js",
     "isEntry": true,
     "dynamicImports": [
       "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js",
+      "module/kommandhub-pickup-location/component/kommandhub-pickup-location-schedule/index.js",
       "module/kommandhub-pickup-location/page/kommandhub-pickup-location-list/index.js",
-      "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js"
+      "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js",
+      "module/kommandhub-order-pickup-info/component/kommandhub-order-pickup-info-tab/index.js"
+    ]
+  },
+  "module/kommandhub-order-pickup-info/component/kommandhub-order-pickup-info-tab/index.js": {
+    "file": "assets/index-BcPBqSlw.js",
+    "name": "index",
+    "src": "module/kommandhub-order-pickup-info/component/kommandhub-order-pickup-info-tab/index.js",
+    "isDynamicEntry": true,
+    "css": [
+      "assets/index-Hs1lYgh2.css"
     ]
   },
   "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js": {
-    "file": "assets/index-BnzVfnlI.js",
+    "file": "assets/index-DSFBPqdm.js",
     "name": "index",
     "src": "module/kommandhub-pickup-location/component/kommandhub-pickup-location-base-form/index.js",
     "isDynamicEntry": true
   },
+  "module/kommandhub-pickup-location/component/kommandhub-pickup-location-schedule/index.js": {
+    "file": "assets/index-Cba5jXe_.js",
+    "name": "index",
+    "src": "module/kommandhub-pickup-location/component/kommandhub-pickup-location-schedule/index.js",
+    "isDynamicEntry": true,
+    "css": [
+      "assets/index-C1L8ecIL.css"
+    ]
+  },
   "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js": {
-    "file": "assets/index-PI2Sjgfn.js",
+    "file": "assets/index-SEkHnCna.js",
     "name": "index",
     "src": "module/kommandhub-pickup-location/page/kommandhub-pickup-location-create/index.js",
     "isDynamicEntry": true

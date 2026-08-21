@@ -36,8 +36,17 @@
                                     :is-loading="isLoading"
                                     :pickup-location="pickupLocation"
                                     @sales-channel-change="onChangeSalesChannel"
-                                    @open-days-change="onChangeOpenDays"
                             />
+                        </mt-card>
+                    {% endblock %}
+
+                    {% block kommandhub_pickup_location_create_schedule %}
+                        <mt-card
+                                v-if="pickupLocation"
+                                :title="$tc('kommandhub-pickup-location.schedule.cardTitle')"
+                                position-identifier="kommandhub-pickup-location-schedule"
+                        >
+                            <kommandhub-pickup-location-schedule :pickup-location="pickupLocation" />
                         </mt-card>
                     {% endblock %}
                 </sw-card-view>

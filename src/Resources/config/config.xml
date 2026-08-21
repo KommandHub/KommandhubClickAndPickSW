@@ -38,5 +38,6 @@
             <help-text lang="fr-FR">Afficher ou masquer les coordonnées dans les informations sur le lieu de ramassage lors du passage à la caisse.</help-text>
             <default-value>true</default-value>
         </input-field>
+
     </card>
 </config>

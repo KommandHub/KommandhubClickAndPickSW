@@ -1,12 +1,16 @@
 {
   "checkout": {
     "kommandhub-click-and-pick": {
-      "unsupportedDeliveryMethod": "The selected delivery method \"%deliveryMethodName%\" is not supported for the chosen payment method. Please select a different delivery method."
+      "pickupLocationRequired": "Please select a valid pickup location before placing your order.",
+      "unsupportedDeliveryMethod": "The selected delivery method \"%deliveryMethodName%\" is not supported for the chosen payment method. Please select a different delivery method.",
+      "invalidPickupTime": "The selected pickup time is outside the location's opening hours. Please choose an available time."
     }
   },
   "error": {
     "kommandhub-click-and-pick": {
-      "unsupportedDeliveryMethod": "The selected delivery method \"%deliveryMethodName%\" is not supported for the chosen payment method. Please select a different delivery method."
+      "pickupLocationRequired": "Please select a valid pickup location before placing your order.",
+      "unsupportedDeliveryMethod": "The selected delivery method \"%deliveryMethodName%\" is not supported for the chosen payment method. Please select a different delivery method.",
+      "invalidPickupTime": "The selected pickup time is outside the location's opening hours. Please choose an available time."
     }
   },
   "general": {
@@ -21,12 +25,23 @@
         "sunday": "Sunday"
       },
       "locationInfoFields": {
+        "closed": "Closed",
         "storeName": "Pickup Location",
         "address": "Address",
         "openDays": "Open Days",
         "openHours": "Open Hours",
         "phone": "Phone",
-        "email": "Email"
+        "email": "Email",
+        "pickupTime": "Pickup time",
+        "pickupComment": "Notes"
+      },
+      "pickupTimeField": {
+        "dateLabel": "Pickup date",
+        "timeLabel": "Pickup time",
+        "placeholder": "Select a time",
+        "noSlots": "No pickup times available on this date.",
+        "commentLabel": "Notes for the pickup location",
+        "commentPlaceholder": "Optional instructions (e.g. arrival time, order details)"
       }
     }
   }

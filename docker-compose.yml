@@ -1,22 +1,27 @@
 services:
   shopware:
-    build: ./
-    container_name: kommandhub-click-and-pick-shopware
+    # Built from the local Dockerfile: the stock dockware image plus shopware-cli,
+    # so the plugin can be validated and packaged from inside its own container.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: 'kommandhub-click-and-pick-shopware:6.7.8.0'
+    container_name: click-and-pick-plugin
     environment:
       - 'XDEBUG_ENABLED=0'
       - 'PHP_VERSION=8.3'
     volumes:
       # ----------------------------------------------------------------------------------------------------------------------------------
       # PLUGINS
-      - "./:/var/www/html/custom/plugins/KommandhubClickAndPickSW"
+      - "./:/var/www/html/custom/static-plugins/KommandhubClickAndPickSW"
       - "database:/var/lib/mysql"
       - "./Makefile:/var/www/html/Makefile"
       # - ".env.test:/var/www/html/.env.test"
       # ----------------------------------------------------------------------------------------------------------------------------------
       # EXCLUDE
-      - "/var/www/html/custom/plugins/KommandhubClickAndPickSW/.git/"
-      - "/var/www/html/custom/plugins/KommandhubClickAndPickSW/node_modules/"
-      - "/var/www/html/custom/plugins/KommandhubClickAndPickSW/vendor/"
+      - "/var/www/html/custom/static-plugins/KommandhubClickAndPickSW/.git/"
+      - "/var/www/html/custom/static-plugins/KommandhubClickAndPickSW/node_modules/"
+      - "/var/www/html/custom/static-plugins/KommandhubClickAndPickSW/vendor/"
       # ----------------------------------------------------------------------------------------------------------------------------------
 
 volumes:

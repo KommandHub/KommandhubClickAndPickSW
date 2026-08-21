@@ -67,4 +67,3 @@ class PickupLocationSalesChannelMappingDefinition extends MappingEntityDefinitio
         ]);
     }
 }
-

@@ -110,42 +110,8 @@
                 />
             {% endblock %}
 
-            {% block kommandhub_pickup_location_base_form_pickupLocation_open_date_field %}
-                <sw-multi-select
-                    v-model:options="daysOfWeek"
-                    label-property="label"
-                    value-property="value"
-                    required
-                    :value="pickupLocation.openDays"
-                    @update:value="changeOpenDays"
-                />
-            {% endblock %}
         </sw-container>
 
-        <sw-container
-            columns="repeat(auto-fit, minmax(250px, 1fr))"
-            gap="0px 32px"
-        >
-            {% block kommandhub_pickup_location_base_form_pickupLocation_opening_hours_field %}
-                <mt-text-field
-                    v-model="pickupLocation.openingHours"
-                    name="sw-field--pickupLocation-openingHours"
-                    :label="$tc('kommandhub-pickup-location.baseForm.labelOpeningHours')"
-                    :placeholder="$tc('kommandhub-pickup-location.baseForm.placeholderOpeningHours')"
-                    :error="pickupLocationOpeningHoursError"
-                />
-            {% endblock %}
-
-            {% block kommandhub_pickup_location_base_form_pickupLocation_closing_hours_field %}
-                <mt-text-field
-                    v-model="pickupLocation.closingHours"
-                    name="sw-field--pickupLocation-closingHours"
-                    :label="$tc('kommandhub-pickup-location.baseForm.labelClosingHours')"
-                    :placeholder="$tc('kommandhub-pickup-location.baseForm.placeholderClosingHours')"
-                    :error="pickupLocationClosingHoursError"
-                />
-            {% endblock %}
-        </sw-container>
 
         <sw-container
             columns="repeat(auto-fit, minmax(250px, 1fr))"

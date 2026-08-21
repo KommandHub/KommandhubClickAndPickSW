@@ -5,31 +5,39 @@ declare(strict_types=1);
 namespace Kommandhub\ClickAndPickSW\Listener;
 
 use Kommandhub\ClickAndPickSW\Event\PickupOrderPlacedEvent;
-use Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW;
-use Shopware\Core\Checkout\Cart\Event\CheckoutOrderPlacedEvent;
+use Kommandhub\ClickAndPickSW\Event\PickupOrderReadyEvent;
 use Shopware\Core\Framework\Event\BusinessEventCollector;
 use Shopware\Core\Framework\Event\BusinessEventCollectorEvent;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
-use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 readonly class BusinessEventCollectorListener
 {
+    /**
+     * @var list<class-string>
+     */
+    private const FLOW_EVENTS = [
+        PickupOrderPlacedEvent::class,
+        PickupOrderReadyEvent::class,
+    ];
+
     public function __construct(
-        private BusinessEventCollector   $businessEventCollector
+        private BusinessEventCollector $businessEventCollector
     ) {
     }
 
     #[AsEventListener(event: BusinessEventCollectorEvent::NAME, priority: 1000)]
-    public function onAddPickupOrderPlacedEvent(BusinessEventCollectorEvent $event): void
+    public function onAddPickupFlowEvents(BusinessEventCollectorEvent $event): void
     {
         $collection = $event->getCollection();
 
-        $definition = $this->businessEventCollector->define(PickupOrderPlacedEvent::class);
+        foreach (self::FLOW_EVENTS as $eventClass) {
+            $definition = $this->businessEventCollector->define($eventClass);
 
-        if (!$definition) {
-            return;
+            if (!$definition) {
+                continue;
+            }
+
+            $collection->set($definition->getName(), $definition);
         }
-
-        $collection->set($definition->getName(), $definition);
     }
 }
