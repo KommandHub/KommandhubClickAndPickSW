@@ -4,246 +4,422 @@
   </a>
 </p>
 
-# Click and Pick plugin for Shopware 6
+# Click and Pick for Shopware 6 — Technical Documentation
 
-`KommandhubClickAndPickSW` adds a complete click-and-collect flow to Shopware:
-- pickup location selection in checkout,
-- a dedicated `Pay on pickup` payment method,
-- a dedicated `Self pick-up` shipping method,
-- pickup-related order state and mail flow automation.
+`KommandhubClickAndPickSW` adds click-and-collect to Shopware 6.7: a self-pickup
+shipping method, a pay-on-pickup payment method, pickup-location management with a
+timezone-aware opening schedule, in-checkout selection of a pickup location + date/
+time, server-side validation, a pickup-ready order-delivery state, and Flow Builder
+triggers/actions for mail and (optional) SMS notifications.
 
-## What This Plugin Does
+This document targets developers who maintain, test, or extend the plugin. It is
+not a merchant/end-user guide.
 
-### Storefront
-- Shows a pickup location selector during checkout for the plugin shipping method.
-- Filters selectable locations by active status and sales channel assignment.
-- Shows location details (address, opening schedule, optional contact details).
-- Lets the customer choose a pickup date and time (limited to the location's
-  timezone-aware opening schedule) and add optional pickup instructions.
-- Persists the pickup selection in the sales channel context and re-shows it on
-  the confirmation/finish page.
+- **Namespace:** `Kommandhub\ClickAndPickSW\` → `src/` (PSR-4)
+- **Plugin class:** `Kommandhub\ClickAndPickSW\KommandhubClickAndPickSW`
+- **Shopware:** `~6.7.0` (`shopware/core`, `shopware/storefront`)
+- **License:** Proprietary (see `LICENSE`)
 
-### Administration
-- Adds a `Pickup Locations` module under **Content**.
-- Lets you create/edit pickup locations and assign them to sales channels.
-- Configure a per-location timezone, a weekly opening schedule and special-date
-  overrides (holidays/exceptions), plus contact details, geo fields and active state.
+---
 
-### Checkout and Order Processing
-- Creates a `Pay on pickup` payment method on activate.
-- Creates a `Self pick-up` shipping method via migration.
-- Restricts `Pay on pickup` to the plugin shipping method.
-- Validates the pickup selection server-side (cart validator): blocks checkout
-  when a location is missing or the chosen time is outside the schedule.
-- Persists the pickup location, time and instructions on the order via the
-  `kommandhub_order_pickup_location` entity (a OneToOne order extension).
-- Dispatches `pickup.order.placed` for pickup orders.
+## 1. Scope
 
-### Administration order view
-- Adds a read-only `Pickup information` tab on the order detail page showing the
-  selected location, address/contact, chosen date/time and instructions. Handles a
-  since-deleted pickup location gracefully (keeps the historical pickup data).
+Implemented, and only this:
 
-### Order State and Notifications
-- Adds delivery state `ready_for_pickup` and related transitions.
-- Creates mail templates and Flow Builder entries for:
-  - customer pickup-ready mail,
-  - admin pickup-order-placed notification.
-- Exposes `pickup.order.placed` and `pickup.order.ready` Flow Builder triggers, and
-  `Send pickup notification to admin` (mail) and `Send pickup SMS to location`
-  actions. The SMS action is an optional soft dependency on KommandhubSmsSW.
+- Pickup-location entity + admin module (address/contact/geo, sales-channel
+  assignment, per-location IANA timezone, weekly opening intervals, special-date
+  overrides).
+- `kommandhub_self_pickup` shipping method and `kommandhub_pay_on_pickup` payment
+  method (payment restricted to the pickup shipping context).
+- In-checkout pickup-location + pickup date/time + free-text comment selection,
+  persisted in the sales-channel context and validated in the cart.
+- Order pickup record entity (`kommandhub_order_pickup_location`) as the single
+  source of truth for an order's pickup data; a OneToOne order extension.
+- a pickup-ready order-delivery state (technical name `ready`, added to the
+  `order_delivery.state` machine); mail templates; `pickup.order.placed`
+  and `pickup.order.ready` Flow Builder triggers; admin-mail and optional-SMS
+  actions.
+- Read-only "Pickup information" tab on the admin order detail page.
 
-## Requirements
+Out of scope: capacity/slot-quota booking, cut-off/lead-time rules, blackout
+periods (there is an extension seam for these — see §12), delivery routing, POS.
 
-From plugin metadata and local setup files:
-- Shopware core: `~6.7.0` (see `composer.json`)
-- PHP: compatible with Shopware 6.7 (local Dockerfile uses PHP 8.3)
-- Composer
-- Node/npm only if you are developing frontend assets
+## 2. Architecture & design decisions
 
-## Installation Guide
+- **Feature-first modules** under `src/` (mirrors Shopware's own plugin layout).
+  A top-level directory is a boundary; inside it, flat Symfony-idiomatic folders
+  (`Service`-like classes, `Listener`, `Handler`, `Struct`, `Event`). One obvious
+  home per class; cross-module access goes through a service, not deep-linking.
+- **DAL-first data model.** Pickup data lives in dedicated DAL entities, never in
+  order custom fields. The order's pickup record is a versioned OneToOne extension.
+- **Selection is context state, not cart state.** The in-progress selection is
+  stored in the `sales_channel_api_context` payload via Shopware's
+  `SalesChannelContextPersister` — the same store as the selected shipping/payment
+  method — so it inherits login-migration, customer scoping, and per-sales-channel
+  isolation for free. The cart validator reads the persisted store (authoritative),
+  never a request-local extension, so a valid selection cannot intermittently
+  disappear between cart recalculations.
+- **Timezone-correct availability.** All open/closed decisions are evaluated in the
+  location's own IANA timezone in PHP; opening times are local wall-clock strings.
+- **Autowiring** via the `../../*` glob (`services.yml`); `autoconfigure: true`
+  auto-tags entity definitions, extensions, cart validators, and flow storers.
+  Only Flow *actions* and the storefront controllers need explicit service config.
 
-### 1) Place the plugin
-Ensure plugin code is available at:
-`custom/plugins/KommandhubClickAndPickSW`
+## 3. Project structure
 
-### 2) Install and activate
-Run from your Shopware project root (where `bin/console` exists):
-
-```bash
-bin/console plugin:refresh
-bin/console plugin:install --activate KommandhubClickAndPickSW
-bin/console cache:clear
+```
+src/
+  Checkout/
+    Cart/                     PayOnPickupCartProcessor (cart validator) + Error/ blockers
+    Payment/                  PayOnPickupPaymentHandler
+    PickupSelection/          PickupContextStorage/Keys, StoredPickupSelection (raw),
+                              PickupSelection (resolved), OrderPickupLocationWriter
+  Entity/
+    PickupLocation/           definition/entity/collection + Aggregate/ (OpeningHour,
+                              SpecialHour, SalesChannelMapping)
+    OrderPickupLocation/      order pickup record entity
+    Order/Aggregated/…        OrderDeliveryStates, transition-action constants
+  Extension/OrderExtension    OneToOne order → order pickup record
+  Event/                      PickupOrderPlacedEvent, PickupOrderReadyEvent
+  Flow/
+    Aware/                    PickupLocationAware, OrderPickupLocationAware
+    Storer/                   flow storers for the two aware contracts
+    Action/                   SendPickupNotificationToAdminAction, SendSmsToPickupLocationAction
+    Sms/SmsGateway            duck-typed interface for the optional SMS plugin
+  Listener/                   SwitchContextEventListener, OrderListener,
+                              PickupOrderReadyListener, BusinessEventCollectorListener
+  PickupLocation/
+    Availability/             PickupLocationAvailabilityService, PickupTimeSlotService
+    PickupLocationSelectionResolver, PickupLocationValidator
+  Installer/                  PaymentMethodInstaller, ShippingMethodInstaller
+  Migration/                  7 migrations (see §14)
+  Storefront/Controller/      SalesChannelPickupLocationController
+  Twig/FormattedCalendarDays  weekday-name formatting helper
+  Resources/
+    config/                   services.yml, routes.xml, config.xml
+    app/administration/       Vue admin (pickup-location module + order tab)
+    app/storefront/           storefront JS plugins (src + built dist)
+    views/                    storefront Twig overrides
+    snippet/                  storefront snippets (en-GB, de-DE, fr-FR)
+    public/                   built administration assets (generated)
+tests/
+  Unit/                       mirrors src/; no kernel
+  Integration/                kernel-backed (@group kernel)
 ```
 
-### 3) If already installed, update instead
+## 4. Data model & DAL
+
+| Table | Entity | Notes |
+|-------|--------|-------|
+| `kommandhub_pickup_location` | `PickupLocationDefinition` | address/contact/geo, `time_format`, `timezone`, `active`, `location_code`. Index on `active`. |
+| `kommandhub_pickup_location_sales_channel` | `…SalesChannelMappingDefinition` | M2M mapping. PK `(pickup_location_id, sales_channel_id)`; FK to `sales_channel` auto-indexes the reverse direction. |
+| `kommandhub_pickup_location_opening_hour` | `…OpeningHourDefinition` | weekly intervals: `day_of_week` (ISO 1–7), `open_time`/`close_time` (`HH:MM`). Index `(pickup_location_id, day_of_week)`. |
+| `kommandhub_pickup_location_special_hour` | `…SpecialHourDefinition` | date overrides: `date`, `closed`, optional `open_time`/`close_time`. Index `(pickup_location_id, date)`. |
+| `kommandhub_order_pickup_location` | `OrderPickupLocationDefinition` | one row per pickup order: `order_id`+`order_version_id`, nullable `pickup_location_id`, `pickup_time`, `comment`. |
+
+**Associations**
+- `PickupLocation.salesChannels` — M2M to `sales_channel` via the mapping table.
+- `PickupLocation.openingHoursSchedule` / `.specialHours` — OneToMany, `CascadeDelete`.
+- `OrderExtension` adds `order.kommandhubPickupLocation` — **OneToOne, autoloaded**,
+  `CascadeDelete`. Every order read (finish page, account, admin API, Flow order
+  data) carries the pickup record without a criteria subscriber.
+- `OrderPickupLocation.pickupLocation` — ManyToOne, autoloaded.
+
+**Referential integrity**
+- Order pickup record → `order` FK is `(order_id, order_version_id) → order(id,
+  version_id)` `ON DELETE CASCADE` (versioned). Unique on `(order_id,
+  order_version_id)`.
+- Order pickup record → pickup location FK is **`ON DELETE SET NULL`**: deleting a
+  location preserves the order's historical pickup data (time/comment) and nulls
+  the reference. The admin tab renders a "location deleted" state for this case.
+
+## 5. Cart & checkout lifecycle
+
+Selection is a two-stage value model:
+- `StoredPickupSelection` — raw strings read from the context payload.
+- `PickupSelection` — resolved: a loaded `PickupLocationEntity` (+ its schedule
+  associations) plus a parsed `\DateTimeImmutable` time and comment.
+
+**Persisting a selection** — `SwitchContextEventListener`
+- On `SwitchContextEvent::CONSISTENT_CHECK`: only acts when the request carries
+  `pickupLocationId` (so payment/address/language switches never disturb it). An
+  empty value clears the selection (remove control); a value is validated
+  (`PickupLocationValidator`, an `EntityExists` on active + assigned-to-sales-channel)
+  and saved via `PickupContextStorage`.
+- On `SalesChannelContextResolvedEvent` (gated on the pickup shipping method, so
+  no lookup on other requests): re-attaches the selection as the `pickupLocation`
+  context extension for the storefront to read.
+
+**Persistence layer** — `PickupContextStorage` wraps `SalesChannelContextPersister`
+(`load`/`save`/`clear`). It scopes the payload to the customer only when genuinely
+logged in (not while an admin impersonates), so `token OR customer_id` migrates the
+selection across the guest→customer login token change without leaking between
+customers or sales channels. Keys are centralized in `PickupContextKeys`.
+
+**Validation gate** — `PayOnPickupCartProcessor` (`shopware.cart.validator`)
+- If payment is Pay-on-pickup but the shipping method is not self-pickup →
+  `UnsupportedDeliveryMethodCartBlockerError`.
+- If shipping is self-pickup: resolve the selection via
+  `PickupLocationSelectionResolver` (which reads the **persisted store**, not the
+  transient extension). No valid location → `PickupLocationRequiredCartBlockerError`.
+  A chosen time that fails `PickupTimeSlotService::isBookable()` →
+  `InvalidPickupTimeCartBlockerError`. All blockers set `blockOrder() = true`. The
+  read is idempotent across recalculations.
+
+**Order placement** — `OrderListener` on `CheckoutOrderPlacedEvent`
+- For pickup orders: `OrderPickupLocationWriter` creates the
+  `kommandhub_order_pickup_location` row; `PickupOrderPlacedEvent` is dispatched;
+  the context selection is then cleared so a new cart in the same session starts
+  clean.
+
+## 6. Pickup scheduling & availability
+
+`PickupLocationAvailabilityService` (pure, stateless, reads only loaded
+associations):
+- `isOpenAt(location, ?ref)` — open at an instant (special-date override wins over
+  weekly; `[open, close)` half-open; supports overnight wrap).
+- `isOpenOnDate(location, ?ref)` — open at any point on the reference local date
+  (the correct check for the selection list).
+- `getOpenIntervalsForDate(location, date)` — concrete `{start, end}` instants for
+  a date; the seam the slot generator builds on.
+- `filterOpen` / `filterOpenOnDate` — filter loaded collections.
+
+`PickupTimeSlotService`:
+- `getSlots(location, date, ?now)` — steps each open interval by
+  `slotStepMinutes` (default 30), keeping the whole slot inside the interval and
+  excluding past + disallowed slots.
+- `isBookable(location, when)` — the checkout gate: `isOpenAt && isAllowed`.
+- `protected isAllowed()` — returns `true`; **extension seam** for cutoff/blackout/
+  capacity rules (decorate the service and override).
+
+**Timezone handling:** decisions run in `location.timezone` (defaults to UTC when
+unset/invalid). The slots controller builds the requested day at midnight in the
+location's timezone so it maps to the intended calendar day for any offset. The
+chosen `pickup_time` is stored as a `DATETIME(3)` (offset carried through the
+ISO-8601 value the storefront submits, parsed back by the resolver).
+
+## 7. Storefront integration
+
+- Twig: `views/storefront/component/shipping/custom/shipping-method.html.twig`
+  extends the core shipping-method component and renders, under the self-pickup
+  method, a location `<select name="pickupLocationId">`, a date helper input, a
+  `<select name="pickupTime">`, and a `<textarea name="pickupComment">`. Selection
+  reaches the context via the core shipping-form auto-submit (context switch).
+- The finish page (`page/checkout/finish/finish-address.html.twig`) renders the
+  pickup card from `order.extensions.kommandhubPickupLocation`.
+- JS plugins (`app/storefront/src/`): `SalesChannelPickupLocation` fetches the
+  location option list; `SalesChannelPickupTime` fetches time-slot options for the
+  chosen date and keeps the date helper from auto-submitting the form.
+- Controller `SalesChannelPickupLocationController` (storefront route scope):
+  - `…pickup-locations.index` — active + sales-channel-assigned locations open on
+    the current date (renders `<option>` HTML). Filters by `salesChannels.id`
+    **without hydrating** the association (avoids per-row over-fetch); loads the
+    schedule associations, batched.
+  - `…pickup-locations.slots` — bookable time-slot `<option>` HTML for a location +
+    `date` query.
+
+## 8. Administration integration
+
+- Module `kommandhub-pickup-location` (under **Content**): list + create/edit,
+  sales-channel assignment, and a schedule editor
+  (`kommandhub-pickup-location-schedule`) for timezone + weekly intervals + special
+  dates.
+- Order detail tab `kommandhub-order-pickup-info`: the child route
+  `sw.order.detail.pickup` is injected into the core `sw.order.detail` route via a
+  lightweight module `routeMiddleware`, and the tab item is added by overriding the
+  `sw-order-detail` template's `sw_order_detail_content_tabs_extension` block. The
+  tab component loads the `kommandhub_order_pickup_location` record by `orderId`
+  (`pickupLocation` association) and renders a read-only, deleted-location-aware
+  view (`pickup-view.js` derives the display state).
+
+## 9. Flow Builder
+
+Triggers (business events), registered with the flow collector by
+`BusinessEventCollectorListener`:
+
+| Event name | Class | Dispatched by | Available data |
+|------------|-------|---------------|----------------|
+| `pickup.order.placed` | `PickupOrderPlacedEvent` | `OrderListener` on order placement | `order`, `pickupLocation`, `pickupOrderLocation` |
+| `pickup.order.ready` | `PickupOrderReadyEvent` | `PickupOrderReadyListener` on delivery entering the `ready` state | `order`, `pickupLocation`, `pickupOrderLocation` |
+
+Both implement `OrderAware`, `MailAware`, `CustomerAware`, `PickupLocationAware`,
+`OrderPickupLocationAware` (placed also carries sales-channel-context/group).
+`getMailStruct()` targets the order customer, and returns an empty recipient list
+when the customer/email is missing.
+
+Flow data is restored by storers (auto-tagged `flow.storer`):
+`PickupLocationFlowStorer` and `OrderPickupLocationFlowStorer` store only the id and
+lazily reload the entity, so delayed flows stay small. `pickupOrderLocation` exposes
+`pickupTime`/`comment` (and the linked location) as first-class flow variables.
+
+Actions (`flow.action`, declared explicitly in `services.yml`):
+- `action.kommandhub.pickup.notify_admin` — `SendPickupNotificationToAdminAction`:
+  emails the order's pickup location (recipient = location email). Requires
+  `OrderAware` + `PickupLocationAware`; `pickupOrderLocation` is optional template
+  data. Template id comes from the action config or the plugin's seeded default.
+- `action.kommandhub.pickup.notify_sms` — `SendSmsToPickupLocationAction`: texts the
+  location's phone number; appends the pickup time when present.
+
+## 10. Email & optional SMS
+
+- **Email:** templates are seeded by migrations (`…PickupReadyMailTemplate`) and
+  sent through the core `MailService` from the admin-notify action. Template data:
+  `order`, `customer`, `pickupLocation`, `pickupOrderLocation`.
+- **SMS:** a **soft dependency** on `KommandhubSmsSW`. The gateway is injected with
+  `@?Kommandhub\SmsSW\Notification\Gateway\NotificationGatewayInterface` (optional
+  service) and used by duck typing against the local `Flow\Sms\SmsGateway` interface
+  — this plugin does not require the SMS plugin in `composer.json`. When absent, the
+  argument is `null` and the action no-ops. Do not type-hint container services
+  against `SmsGateway`.
+
+## 11. Configuration
+
+`src/Resources/config/config.xml` — three booleans, consumed only in storefront
+Twig via `config('KommandhubClickAndPickSW.config.<key>')`:
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `enablePickupLocationSelection` | `true` | gates the in-checkout selector |
+| `showStreetNameInPickupLocationSelectionField` | `false` | street in the option label |
+| `showContactDetailInPickupLocationInfo` | `true` | contact rows in the info card |
+
+The admin-notify action reads the sender email from core system config
+(`SystemConfigService`), not from plugin config.
+
+## 12. Extension & customization points
+
+- **Slot rules:** decorate `PickupTimeSlotService` and override the protected
+  `isAllowed()` to add cutoff/blackout/capacity logic (used by both slot generation
+  and the checkout gate).
+- **Twig blocks:** the storefront shipping-method override and the info card are
+  fully block-wrapped; the admin `sw-order-detail` tab uses the core extension block.
+- **Flow contracts:** `PickupLocationAware` / `OrderPickupLocationAware` let other
+  pickup-related events reuse the same storers and actions.
+- **Reuse services**, don't reach across modules: `PickupLocationSelectionResolver`
+  (context → resolved selection), `PickupLocationAvailabilityService`,
+  `PickupContextStorage`, `OrderPickupLocationWriter`.
+
+## 13. Installation & compatibility (developers)
+
+- `shopware/core` and `shopware/storefront` `~6.7.0`.
+- PHP 8.2+ (CI runs 8.2; the dev Docker image is `dockware/shopware:6.7.8.0`).
+- Install/activate lifecycle (`KommandhubClickAndPickSW`):
+  - `install` / `update` → run the payment + shipping installers (idempotent).
+  - `activate` / `deactivate` → activate/deactivate the payment + shipping methods.
+  - Migrations create all tables/state/mail/flow entries.
+
+## 14. Migrations, update & uninstall
+
+Ordered by timestamp:
+
+1. `1759696668PickupLocation` — location + sales-channel mapping tables (+ `active` index).
+2. `1760109246AddReadyForPickupOrderState` — pickup-ready `ready` `order_delivery` state + transitions.
+3. `1760113852PickupReadyMailTemplate` — mail template types/templates.
+4. `1760115677AddPickupMailSendFlow` — flow that sends the customer pickup-ready mail.
+5. `1760200000AddPickupAdminNotificationFlow` — flow for the admin pickup-order-placed mail.
+6. `1760300000NormalizedPickupSchedule` — `timezone` column + opening-hour/special-hour tables.
+7. `1760400000OrderPickupLocation` — order pickup record table.
+
+**Update:** `update()` re-runs the installers so the payment/shipping methods
+migrate if their ids/classes move; each installer is idempotent.
+
+**Uninstall:** payment and shipping methods are **deactivated, never deleted**
+(historical orders reference them). Without "keep user data", the five plugin tables
+are dropped **child-first** (`order_pickup_location` → opening/special hours →
+sales-channel mapping → `pickup_location`) so foreign keys don't block removal.
+Orders are never deleted.
+
+## 15. Performance, caching & indexing
+
+- Selection lives in the context payload → no cart-payload bloat; reads are single
+  indexed lookups scoped to `(token/customer, sales_channel)`.
+- The context-resolved listener is gated on the pickup shipping method, so
+  non-pickup requests do zero pickup work.
+- Storefront `index()` filters by `salesChannels.id` without hydrating the
+  association (one fewer batched query + no `SalesChannelEntity` hydration per row);
+  to-many schedule associations load batched (`IN(...)`), so there is no N+1.
+- Indexing: `pickup_location.active`; mapping PK + FK auto-index cover both
+  directions (InnoDB appends the PK, so a single-column index is effectively
+  `(col, id)`); schedule aggregates indexed on `(pickup_location_id, day_of_week|date)`;
+  order pickup record unique on `(order_id, order_version_id)` + index on
+  `pickup_location_id`.
+- Availability is computed in PHP (per-location timezone) rather than SQL, so
+  results are not cacheable across timezones — the working sets are small (a
+  merchant's locations), and queries stay index-served.
+
+## 16. Error handling, logging & debugging
+
+- Cart problems surface as blocking `Error`s (see §5) with message keys under
+  `checkout.kommandhub-click-and-pick.*` / `error.…`.
+- An invalid/foreign/inactive location selection throws a
+  `ConstraintViolationException` at the context switch (aborts the switch).
+- Flow actions inject a PSR `logger` and log-and-swallow provider failures (missing
+  template, mail/SMS send errors) so a flow run is not aborted by a notification.
+- Debugging tips: the selection is in `sales_channel_api_context.payload`
+  (`pickupLocationId`/`pickupTime`/`pickupComment`); the resolved selection is what
+  the cart validator sees; the order record is in `kommandhub_order_pickup_location`
+  and on `order.extensions.kommandhubPickupLocation`.
+
+## 17. Local development
+
+The plugin ships its own dev stack (`docker-compose.yml`, `Dockerfile`, `Makefile`).
+Run from the plugin root:
 
 ```bash
-bin/console plugin:refresh
-bin/console plugin:update KommandhubClickAndPickSW
-bin/console cache:clear
+make up            # start the dev stack
+make shell         # bash into the app container
+make test          # PHPUnit (phpunit.dist.xml). Filter: make test FILTER=SomeTest
+make test-coverage # coverage (text + clover + html)
+make analyse       # PHPStan (phpstan.dist.neon), src only
+make cs / cs-fix   # php-cs-fixer dry-run / apply
+make validate-plugin   # shopware-cli store compliance (needs make build)
+make zip               # distributable package into build/ (needs make build)
+make help          # full target list
 ```
 
-### 4) Rebuild storefront/admin assets when needed
-If you changed plugin JS/Twig/Admin code, rebuild assets according to your environment. In this repository, a common path is:
+Assets (generated; rebuild after changing admin/storefront source):
 
 ```bash
-bin/build-storefront.sh
+bin/build-administration.sh && bin/build-storefront.sh
 ```
 
-If your setup uses a watcher or CI build pipeline, use your project-specific asset build commands.
+## 18. Testing
 
-## Configuration Guide
+- `tests/Unit/` mirrors `src/`; no kernel, PHPUnit `TestCase` with mocks.
+- `tests/Integration/` is kernel-backed and tagged `#[Group('kernel')]` (e.g.
+  `CartValidationTest`); it needs a booted Shopware + database.
+- Run all: `make test`. No-kernel (CI-equivalent): `--exclude-group kernel`.
+- **100% line coverage** is enforced in CI (`coverage-check … 100`); coverage source
+  is `src/` excluding `Migration/`, `Resources/`, `DependencyInjection/`, `Entity/`,
+  and the plugin bootstrap. `beStrictAboutCoverageMetadata` is on — every test
+  declares `#[CoversClass]`/`#[UsesClass]`.
 
-### A) Enable plugin behavior
-In Administration:
-1. Go to **Extensions > My Extensions** (or your plugin management area).
-2. Open `Kommandhub Click and Pick` config.
-3. Set:
-   - `Enable pickup location selection`
-   - `Show street name in pickup location selection`
-   - `Show contact details in pickup location info`
+## 19. Static analysis & coding standards
 
-These options are defined in `src/Resources/config/config.xml`.
+- **PHPStan** level 9 (`phpstan.dist.neon`), analysing `src/`.
+- **php-cs-fixer** (`.php-cs-fixer.dist.php`) and a `phpcs.dist.xml` ruleset.
+- **CI** (`.github/workflows/php.yml`): composer validate → PHP lint → PHPStan →
+  cs-fixer (dry-run) → PHPUnit (no-kernel) with the 100% coverage gate.
+- Run locally before committing: `make cs-fix && make analyse && make test`.
 
-### B) Prepare shipping and payment assignment
-After install, plugin creates methods, but you still need to ensure assignment/availability in your sales channel configuration:
-- Shipping method technical name: `kommandhub_self_pickup`
-- Payment method technical name: `kommandhub_pay_on_pickup`
+## 20. Known technical limitations
 
-### C) Create pickup locations
-In Administration, open **Content > Pickup Locations** and add entries.
+- Slot generation offers times but does not enforce capacity/quota, lead-time/
+  cutoff, or blackout windows — these are the `isAllowed()` extension seam (§12).
+- Availability is timezone-evaluated in PHP and not cross-timezone cacheable
+  (small working sets; queries stay index-served).
+- The SMS integration is best-effort and duck-typed; there is no compile-time
+  guarantee the optional plugin's gateway matches `SmsGateway`.
+- Built admin/storefront assets must be regenerated as a release/packaging step.
 
-Recommended minimum fields:
-- Name
-- Street
-- Postal code
-- City
-- Email
-- Sales channels
-- Active = true
+## 21. Contributing
 
-Useful optional fields:
-- Phone number
-- Additional address lines
-- Timezone and the opening schedule (weekly hours + special-date overrides)
-- Latitude/longitude
-- Location code
+See `CONTRIBUTING.md` for the branch/commit conventions and the required quality
+gates. In short: branch off `develop`, keep the change inside its feature module,
+add/adjust tests with each behavior change, and ensure `make cs-fix && make analyse
+&& make test` (100% coverage) passes before opening a PR.
 
-### D) Verify sales channel mapping
-A pickup location is selectable in checkout only when:
-- location is active,
-- location is mapped to the current sales channel.
+## 22. License
 
-## Usage Guide
-
-### Customer flow
-1. Customer selects `Self pick-up` shipping method in checkout.
-2. Customer selects a pickup location, an available pickup time and optional notes.
-3. Customer can use `Pay on pickup` (enforced to pickup shipping context).
-4. Order is placed; the pickup selection is stored on the order via the
-   `kommandhub_order_pickup_location` entity.
-
-### Internal fulfillment flow
-1. Process order as usual.
-2. Move delivery state to `ready_for_pickup`.
-3. Customer receives pickup-ready email via created flow.
-
-## Data and Integration Notes
-
-### Entities
-- `kommandhub_pickup_location` — the location: address/contact/geo metadata and a
-  many-to-many mapping to `sales_channel`, with normalized opening-hour and
-  special-date (override) aggregates and an IANA timezone.
-- `kommandhub_order_pickup_location` — one row per pickup order (a OneToOne order
-  extension): `pickup_location_id`, chosen `pickup_time` and `comment`. This is the
-  single source of truth for an order's pickup data. Deleting a location nulls the
-  reference (`ON DELETE SET NULL`) and keeps the historical order data.
-
-### Storefront routes
-Controller: `SalesChannelPickupLocationController`
-- list route: `frontend.kommandhub.sales-channel.pickup-locations.index`
-- slots route: `frontend.kommandhub.sales-channel.pickup-locations.slots`
-
-## Development Guide
-
-Plugin root: `custom/plugins/KommandhubClickAndPickSW`
-
-### Install plugin dependencies
-
-```bash
-cd custom/plugins/KommandhubClickAndPickSW
-composer install
-```
-
-### Static analysis and code style
-
-```bash
-cd custom/plugins/KommandhubClickAndPickSW
-./vendor/bin/phpstan analyse src -c phpstan.dist.neon --memory-limit=1G
-./vendor/bin/php-cs-fixer fix --dry-run --diff
-```
-
-### Tests
-
-```bash
-cd custom/plugins/KommandhubClickAndPickSW
-./vendor/bin/phpunit -c phpunit.dist.xml
-```
-
-### Optional Docker workflow (plugin-local)
-The plugin contains its own `docker-compose.yml`, `Dockerfile`, and `Makefile`.
-
-```bash
-cd custom/plugins/KommandhubClickAndPickSW
-make up
-make cs-fix analyse test
-```
-
-`make validate-plugin` runs shopware-cli store-compliance checks and `make zip`
-builds a distributable package into `build/` (both need `make build` first so the
-image picks up the bundled `shopware-cli`). Run `make help` for the full list.
-
-## Troubleshooting
-
-### Pickup locations do not appear in checkout
-- Confirm plugin config enables pickup selection.
-- Confirm location is active.
-- Confirm location is assigned to current sales channel.
-- Clear cache and rebuild storefront assets.
-
-### Pickup info block not rendering updates
-- Ensure storefront JS was rebuilt after changes.
-- Confirm data attributes exist on rendered shipping method markup.
-
-### `Pay on pickup` not available
-- Ensure plugin is active.
-- Ensure selected shipping method is `Self pick-up`.
-- Verify payment method is active and assigned in sales channel settings.
-
-### Mail flows not triggered
-- Verify plugin migrations executed successfully.
-- Check Flow Builder entries created by migration.
-- Confirm state transition to `ready_for_pickup` occurs on order delivery.
-
-## Security and Data Handling
-
-- Uninstall keeps (but deactivates) the payment and shipping methods, so historical
-  orders that reference them stay intact.
-- Uninstalling with "keep user data" leaves all plugin tables in place. Without it,
-  the plugin tables (`kommandhub_order_pickup_location`, the opening-hour and
-  special-hour aggregates, the sales-channel mapping and `kommandhub_pickup_location`)
-  are dropped child-first so foreign keys don't block removal. Orders themselves are
-  never deleted.
-
-## Version and Compatibility
-
-- Plugin package version: `0.9.0` (first public, pre-1.0 release)
-- Target Shopware core: `~6.7.0`
-- License: Proprietary
-
-## Support
-
-- Vendor: Kommandhub Limited
-- Support: https://www.kommandhub.com
-- Website: https://www.kommandhub.com
+Proprietary — © Kommandhub Limited. Licensed, not sold, for use with Shopware 6
+under a separate commercial agreement. See `LICENSE`. Security policy: `SECURITY.md`.

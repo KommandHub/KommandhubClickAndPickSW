@@ -36,7 +36,7 @@ before 1.0.0.
   deleted locations gracefully).
 
 ## Order state, mail & Flow Builder
-- `ready_for_pickup` order-delivery state with transitions.
+- Pickup-ready `order_delivery` state (technical name `ready`) with transitions.
 - Mail templates for the customer pickup-ready mail and the admin
   pickup-order-placed notification.
 - `pickup.order.placed` and `pickup.order.ready` Flow Builder triggers exposing the
